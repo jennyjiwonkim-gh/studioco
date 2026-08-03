@@ -7,11 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --cream: #F8F6F1;
@@ -19,9 +17,6 @@
     --paper: #FFFFFF;
     --hairline: #DEDACD;
     --muted: #8A8579;
-    --today-tint: #FDF9E8;
-    --flash: #FFF176;
-    --scrim: rgba(16, 14, 10, 0.28);
     --accent-navy: #102A43;
     --accent-royal: #120A8F;
     --accent-cobalt: #1D4ED8;
@@ -34,8 +29,6 @@
     --paper: #201E17;
     --hairline: #38352B;
     --muted: #9A9483;
-    --today-tint: #2E2A16;
-    --flash: #6B5F14;
     --accent-navy: #6FA0CC;
     --accent-royal: #8C8AF0;
     --accent-cobalt: #7FA9FF;
@@ -50,7 +43,6 @@
     color: var(--ink);
   }
   * { box-sizing: border-box; }
-  [data-theme="dark"] { color-scheme: dark; }
 </style>
 </head>
 <body>
@@ -58,28 +50,70 @@
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
 
-// ============ SUPABASE CLIENT ============
 const SUPABASE_URL = 'https://hvqjpoqamxalitydrega.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2cWpwb3FhbXhhbGl0eWRyZWdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3MjE2OTcsImV4cCI6MjEwMTI5NzY5N30.fWDNqRDXanEMLrSjFkRXuVv9CPyXbU276KO_zrB1g8w';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const COLORS = {
   navy: "var(--accent-navy)",
-  royalBlue: "var(--accent-royal)",
-  cobalt: "var(--accent-cobalt)",
   tomato: "var(--accent-tomato)",
-  lemon: "#FFF176",
   cream: "var(--cream)",
   ink: "var(--ink)",
   paper: "var(--paper)",
   hairline: "var(--hairline)",
   muted: "var(--muted)",
-  todayTint: "var(--today-tint)",
-  scrim: "var(--scrim)",
 };
 
 const RADIUS = 3;
+
+// Supabase Auth via REST API
+const SupabaseAuth = {
+  async signUp(email, password) {
+    const response = await fetch(
+      `${SUPABASE_URL}/auth/v1/signup`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ email, password }),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Signup failed');
+    return data;
+  },
+
+  async signIn(email, password) {
+    const response = await fetch(
+      `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ email, password }),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error_description || 'Login failed');
+    localStorage.setItem('supabase_token', data.access_token);
+    localStorage.setItem('supabase_user_email', email);
+    return data;
+  },
+
+  async signOut() {
+    localStorage.removeItem('supabase_token');
+    localStorage.removeItem('supabase_user_email');
+  },
+
+  getUser() {
+    const token = localStorage.getItem('supabase_token');
+    const email = localStorage.getItem('supabase_user_email');
+    return token && email ? { email } : null;
+  },
+};
 
 // ============ LANDING PAGE ============
 function LandingPage({ onLoginClick, onSignupClick }) {
@@ -92,10 +126,7 @@ function LandingPage({ onLoginClick, onSignupClick }) {
       padding: '24px',
       background: COLORS.cream,
     }}>
-      <div style={{
-        maxWidth: '600px',
-        textAlign: 'center',
-      }}>
+      <div style={{ maxWidth: '600px', textAlign: 'center' }}>
         <h1 style={{
           fontSize: '48px',
           fontWeight: 700,
@@ -113,53 +144,29 @@ function LandingPage({ onLoginClick, onSignupClick }) {
         }}>
           A private studio management dashboard for ceramic artists. Track projects, manage content, and grow your creative business — all in one place.
         </p>
-        
-        <div style={{
-          display: 'flex',
-          gap: '12px',
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-        }}>
-          <button
-            onClick={onLoginClick}
-            style={{
-              padding: '12px 24px',
-              fontSize: '14px',
-              fontWeight: 600,
-              backgroundColor: COLORS.navy,
-              color: '#FFF',
-              border: 'none',
-              borderRadius: RADIUS,
-              cursor: 'pointer',
-              transition: 'opacity 200ms',
-            }}
-            onMouseEnter={(e) => e.target.style.opacity = '0.9'}
-            onMouseLeave={(e) => e.target.style.opacity = '1'}
-          >
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button onClick={onLoginClick} style={{
+            padding: '12px 24px',
+            fontSize: '14px',
+            fontWeight: 600,
+            backgroundColor: COLORS.navy,
+            color: '#FFF',
+            border: 'none',
+            borderRadius: RADIUS,
+            cursor: 'pointer',
+          }}>
             Log In
           </button>
-          <button
-            onClick={onSignupClick}
-            style={{
-              padding: '12px 24px',
-              fontSize: '14px',
-              fontWeight: 600,
-              backgroundColor: 'transparent',
-              color: COLORS.navy,
-              border: `2px solid ${COLORS.navy}`,
-              borderRadius: RADIUS,
-              cursor: 'pointer',
-              transition: 'all 200ms',
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = COLORS.navy;
-              e.target.style.color = '#FFF';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'transparent';
-              e.target.style.color = COLORS.navy;
-            }}
-          >
+          <button onClick={onSignupClick} style={{
+            padding: '12px 24px',
+            fontSize: '14px',
+            fontWeight: 600,
+            backgroundColor: 'transparent',
+            color: COLORS.navy,
+            border: `2px solid ${COLORS.navy}`,
+            borderRadius: RADIUS,
+            cursor: 'pointer',
+          }}>
             Sign Up
           </button>
         </div>
@@ -168,8 +175,8 @@ function LandingPage({ onLoginClick, onSignupClick }) {
   );
 }
 
-// ============ LOGIN/SIGNUP FORMS ============
-function AuthForm({ isSignUp, onBack, onSuccess, onError }) {
+// ============ AUTH FORM ============
+function AuthForm({ isSignUp, onBack, onSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -182,23 +189,14 @@ function AuthForm({ isSignUp, onBack, onSuccess, onError }) {
 
     try {
       if (isSignUp) {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (authError) throw authError;
-        onSuccess('Check your email for a confirmation link');
+        await SupabaseAuth.signUp(email, password);
+        onSuccess('Check your email to confirm your account');
       } else {
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (authError) throw authError;
-        onSuccess('Logged in successfully');
+        await SupabaseAuth.signIn(email, password);
+        onSuccess('Logged in successfully!');
       }
     } catch (err) {
       setError(err.message);
-      onError(err.message);
     } finally {
       setLoading(false);
     }
@@ -213,22 +211,16 @@ function AuthForm({ isSignUp, onBack, onSuccess, onError }) {
       padding: '24px',
       background: COLORS.cream,
     }}>
-      <div style={{
-        maxWidth: '400px',
-        width: '100%',
-      }}>
-        <button
-          onClick={onBack}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: COLORS.muted,
-            cursor: 'pointer',
-            marginBottom: '24px',
-            fontSize: '14px',
-            fontWeight: 500,
-          }}
-        >
+      <div style={{ maxWidth: '400px', width: '100%' }}>
+        <button onClick={onBack} style={{
+          background: 'none',
+          border: 'none',
+          color: COLORS.muted,
+          cursor: 'pointer',
+          marginBottom: '24px',
+          fontSize: '14px',
+          fontWeight: 500,
+        }}>
           ← Back
         </button>
 
@@ -318,22 +310,18 @@ function AuthForm({ isSignUp, onBack, onSuccess, onError }) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              fontSize: '14px',
-              fontWeight: 600,
-              backgroundColor: COLORS.navy,
-              color: '#FFF',
-              border: 'none',
-              borderRadius: RADIUS,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
+          <button type="submit" disabled={loading} style={{
+            width: '100%',
+            padding: '12px',
+            fontSize: '14px',
+            fontWeight: 600,
+            backgroundColor: COLORS.navy,
+            color: '#FFF',
+            border: 'none',
+            borderRadius: RADIUS,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1,
+          }}>
             {loading ? 'Please wait...' : (isSignUp ? 'Sign Up' : 'Log In')}
           </button>
         </form>
@@ -345,60 +333,32 @@ function AuthForm({ isSignUp, onBack, onSuccess, onError }) {
 // ============ MAIN APP ============
 export default function App() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [authView, setAuthView] = useState(null); // null, 'login', 'signup'
+  const [authView, setAuthView] = useState(null);
   const [message, setMessage] = useState('');
   const messageTimeoutRef = useRef(null);
 
-  // Check auth state on mount
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
-      setLoading(false);
-    };
-    checkAuth();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      setAuthView(null);
-    });
-
-    return () => subscription?.unsubscribe();
+    const currentUser = SupabaseAuth.getUser();
+    setUser(currentUser);
   }, []);
 
   const showMessage = (msg) => {
     setMessage(msg);
     if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current);
-    messageTimeoutRef.current = setTimeout(() => setMessage(''), 3000);
+    messageTimeoutRef.current = setTimeout(() => setMessage(''), 4000);
   };
 
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: COLORS.cream,
-        fontSize: '14px',
-        color: COLORS.muted,
-      }}>
-        Loading...
-      </div>
-    );
-  }
-
-  // Not logged in - show auth flow
   if (!user) {
     if (authView === 'login') {
       return (
         <AuthForm
           isSignUp={false}
           onBack={() => setAuthView(null)}
-          onSuccess={showMessage}
-          onError={showMessage}
+          onSuccess={(msg) => {
+            showMessage(msg);
+            const currentUser = SupabaseAuth.getUser();
+            setUser(currentUser);
+          }}
         />
       );
     }
@@ -408,7 +368,6 @@ export default function App() {
           isSignUp={true}
           onBack={() => setAuthView(null)}
           onSuccess={showMessage}
-          onError={showMessage}
         />
       );
     }
@@ -420,33 +379,29 @@ export default function App() {
     );
   }
 
-  // Logged in - show dashboard with logout button
   return (
-    <div style={{ position: 'relative' }}>
+    <div>
       <div style={{
         position: 'fixed',
         top: '16px',
         right: '16px',
         zIndex: 9999,
       }}>
-        <button
-          onClick={() => {
-            supabase.auth.signOut();
-            setUser(null);
-          }}
-          style={{
-            padding: '8px 16px',
-            fontSize: '12px',
-            fontWeight: 600,
-            backgroundColor: COLORS.tomato,
-            color: '#FFF',
-            border: 'none',
-            borderRadius: RADIUS,
-            cursor: 'pointer',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
+        <button onClick={() => {
+          SupabaseAuth.signOut();
+          setUser(null);
+        }} style={{
+          padding: '8px 16px',
+          fontSize: '12px',
+          fontWeight: 600,
+          backgroundColor: COLORS.tomato,
+          color: '#FFF',
+          border: 'none',
+          borderRadius: RADIUS,
+          cursor: 'pointer',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+        }}>
           Log Out
         </button>
       </div>
@@ -496,9 +451,9 @@ export default function App() {
           margin: '0 auto',
           lineHeight: 1.6,
         }}>
-          The full dashboard is being integrated. For now, you're successfully authenticated. 
+          The full dashboard is being integrated. For now, you're successfully authenticated with Supabase. 
           <br /><br />
-          This proves the auth layer is working. Next session: we'll integrate your full v49 dashboard and wire up data sync with Supabase.
+          Next: integrate your v49 dashboard and wire up data sync.
         </p>
       </div>
     </div>
