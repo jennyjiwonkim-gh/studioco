@@ -4224,6 +4224,7 @@ function ProductPage({ project, content, setContent, onBack }) {
       if (r.status === "fulfilled") {
         newPhotos.push({ id: "photo-" + Date.now() + "-" + i + "-" + Math.random().toString(36).slice(2, 7), dataUrl: r.value });
       } else {
+        console.warn("StudioCo: could not process photo", files[i].name, r.reason);
         failed.push(files[i].name);
       }
     });
