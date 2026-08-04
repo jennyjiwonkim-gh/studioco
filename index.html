@@ -366,6 +366,13 @@ function appToday() {
 }
 
 function isSameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+// Overdue = due on an earlier calendar day than today and not yet completed.
+// Compares by day, not raw timestamp, matching isSameDay's convention above.
+function isOverdueTask(t, today) {
+  if (!t || t.completed || !t.date) return false;
+  const d = new Date(t.date.getFullYear(), t.date.getMonth(), t.date.getDate());
+  return d < today;
+}
 function startOfWeek(d){const r=new Date(d);r.setDate(r.getDate()-r.getDay());r.setHours(0,0,0,0);return r;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function fmtHour(h){const period=h>=12?"PM":"AM";let hr=h%12;if(hr===0)hr=12;return hr+" "+period;}
@@ -3476,6 +3483,7 @@ function ProjectListView({ projects, setProjects, tasks, onOpenProject }) {
 
 /* ---------- Task List View ---------- */
 function TaskListView({ projects, tasks, setTasks, onOpenProject }) {
+  const today = appToday();
   const [statusFilter, setStatusFilter] = useState("All");
   // Only one task editable at a time, identified by id — matches the pattern
   // used in CategoryTaskTable elsewhere in the app.
@@ -3576,6 +3584,7 @@ function TaskListView({ projects, tasks, setTasks, onOpenProject }) {
                         fontSize: 12.5,
                         textDecoration: t.completed ? "line-through" : "none",
                         opacity: t.completed ? 0.45 : 1,
+                        color: isOverdueTask(t, today) ? COLORS.tomato : COLORS.ink,
                         cursor: "text",
                         display: "block",
                       }}
@@ -6279,6 +6288,7 @@ function dateToInputStr(d) {
 }
 
 function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, projects, allTasks, category, columnLabel, extraFields }) {
+  const today = appToday();
   const [newTitle, setNewTitle] = useState("");
   const [newDate, setNewDate] = useState("");
   const [newStart, setNewStart] = useState("");
@@ -6294,7 +6304,7 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
     if (!editingId) return;
     const handleOutsideClick = (e) => {
       if (editingRowRef.current && !editingRowRef.current.contains(e.target)) {
-        setEditingId(null);
+        finishEditing();
       }
     };
     document.addEventListener("pointerdown", handleOutsideClick);
@@ -6322,6 +6332,19 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
 
   const updateTaskField = (id, field, value) => {
     setAllTasks((prev) => prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)));
+  };
+
+  // Closing the edit (Enter/Escape, the Done checkmark, or an outside click) is
+  // where a sane minimum duration gets enforced. The End time field's onChange
+  // deliberately allows transient negative/zero durations while typing (typing a
+  // new hour digit-by-digit passes through intermediate values earlier than the
+  // start time) so the displayed value always matches what was typed instead of
+  // snapping to something else mid-edit; this cleans it up once editing is done.
+  const finishEditing = () => {
+    if (editingId) {
+      setAllTasks((prev) => prev.map((t) => (t.id === editingId && (t.durationMinutes ?? 0) < 15 ? { ...t, durationMinutes: 15 } : t)));
+    }
+    setEditingId(null);
   };
 
   // AI copy-task syntax: "copy tasks [1,2,3] from project [name]" pulls named
@@ -6421,13 +6444,18 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
             autoFocus
             value={t.title}
             onChange={(e) => updateTaskField(t.id, "title", e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") finishEditing(); }}
             style={fieldInputStyle}
           />
         ) : (
           <span
             onClick={() => setEditingId(t.id)}
-            style={{ fontSize: 12.5, textDecoration: t.completed ? "line-through" : "none", cursor: "text" }}
+            style={{
+              fontSize: 12.5,
+              textDecoration: t.completed ? "line-through" : "none",
+              color: isOverdueTask(t, today) ? COLORS.tomato : COLORS.ink,
+              cursor: "text",
+            }}
           >
             {t.title}
           </span>
@@ -6438,7 +6466,7 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
             type="date"
             value={dateToInputStr(t.date)}
             onChange={(e) => updateTaskField(t.id, "date", e.target.value ? new Date(e.target.value + "T00:00:00") : t.date)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") finishEditing(); }}
             style={fieldInputStyle}
           />
         ) : (
@@ -6451,10 +6479,9 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
             value={minutesToTimeStr(t.startMinutes)}
             onChange={(e) => {
               const newStartMin = timeStrToMinutes(e.target.value);
-              const currentDuration = t.durationMinutes ?? 60;
               updateTaskField(t.id, "startMinutes", newStartMin);
             }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") finishEditing(); }}
             style={fieldInputStyle}
           />
         ) : (
@@ -6467,10 +6494,13 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
             value={minutesToTimeStr(endMinutes)}
             onChange={(e) => {
               const newEndMin = timeStrToMinutes(e.target.value);
-              const newDuration = Math.max(newEndMin - (t.startMinutes ?? 0), 15);
-              updateTaskField(t.id, "durationMinutes", newDuration);
+              if (newEndMin == null) return;
+              // No floor here while typing — clamping mid-edit would force the
+              // display to a value the user never typed (see finishEditing,
+              // which enforces a sane minimum once editing actually closes).
+              updateTaskField(t.id, "durationMinutes", newEndMin - (t.startMinutes ?? 0));
             }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") finishEditing(); }}
             style={fieldInputStyle}
           />
         ) : (
@@ -6478,7 +6508,7 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
         )}
 
         {isEditing ? (
-          <button onClick={() => setEditingId(null)} title="Done editing" style={{ background: "none", border: "none", cursor: "pointer", color: accentHex, padding: 0 }}>
+          <button onClick={finishEditing} title="Done editing" style={{ background: "none", border: "none", cursor: "pointer", color: accentHex, padding: 0 }}>
             <i className="ti ti-check" style={{ fontSize: 14 }} aria-hidden="true" />
           </button>
         ) : (
