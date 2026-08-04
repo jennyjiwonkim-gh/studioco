@@ -136,7 +136,7 @@ const SEED_PROJECTS = [
   { id: "mushroom-lamp-l", name: "Mushroom lamp (L)", accentIdx: 2, icon: "squiggly", dateAdded: "2026-07-27" },
   { id: "large-planter", name: "Large planter", accentIdx: 3, icon: "angular", dateAdded: "2026-07-27" },
   { id: "newport-inspo", name: "Newport inspo", accentIdx: 4, icon: "wideBowl", dateAdded: "2026-07-27" },
-];
+].map((p) => ({ ...p, updatedAt: new Date(p.dateAdded).getTime() }));
 
 /* ---------- Project Icon ----------
    Flat, single-color vessel silhouettes — simple geometric shapes only, no
@@ -696,8 +696,36 @@ function StudioApp({ onSignOut, email }) {
 
 function AppInner({ initial, storageAvailable, onSignOut, email }) {
   const [screen, setScreen] = useState({ name: "studio" });
-  const [projects, setProjects] = usePersistentState("projects", initial.projects);
-  const [tasks, setTasks] = usePersistentState("tasks", initial.tasks);
+  const [projects, setProjectsRaw] = usePersistentState("projects", initial.projects);
+  const [tasks, setTasksRaw] = usePersistentState("tasks", initial.tasks);
+
+  // Tracks each project's `updatedAt` so Home can surface "recently edited"
+  // projects. Wrapping the setters once here — rather than touching every
+  // call site across the app — bumps the timestamp whenever a project's own
+  // fields change, or whenever any of its tasks are added, edited, or
+  // removed (task activity is the dominant day-to-day signal).
+  const setProjects = (updater) => {
+    setProjectsRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      return next.map((p) => {
+        const prevP = prev.find((pp) => pp.id === p.id);
+        return prevP && prevP !== p ? { ...p, updatedAt: Date.now() } : p;
+      });
+    });
+  };
+  const setTasks = (updater) => {
+    setTasksRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      const touchedProjectIds = new Set();
+      const prevById = new Map(prev.map((t) => [t.id, t]));
+      next.forEach((t) => { if (prevById.get(t.id) !== t) touchedProjectIds.add(t.projectId); });
+      prev.forEach((t) => { if (!next.some((nt) => nt.id === t.id)) touchedProjectIds.add(t.projectId); });
+      if (touchedProjectIds.size) {
+        setProjects((pPrev) => pPrev.map((p) => (touchedProjectIds.has(p.id) ? { ...p, updatedAt: Date.now() } : p)));
+      }
+      return next;
+    });
+  };
   // Home is now the default landing tab within Studio, rather than a
   // separate "Enter Studio" screen — matches how every other tab works.
   const [studioTab, setStudioTab] = useState("home");
@@ -1042,8 +1070,75 @@ function NavDrawer({ open, onClose, projects, studioTab, screen, onGoStudioTab, 
   );
 }
 
-/* ---------- Home (new landing screen — placeholder, not yet built out) ---------- */
-function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, setBoardContent }) {
+// Bordered, not filled — the design system reserves tinted background fills
+// for nothing but project stripes, so status/project badges stay outline-only.
+function Badge({ label, hex }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.03em",
+        textTransform: "uppercase",
+        color: hex,
+        border: `1px solid ${hex}`,
+        borderRadius: RADIUS,
+        padding: "2px 7px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// A read-only preview of the current week's content-category tasks — dots
+// colored by project, same visual language MonthGrid already uses for its
+// day cells. Deliberately not interactive beyond the "This week" link that
+// opens the real Master Calendar; this is a snippet, not a second calendar.
+function ContentCalendarSnippet({ tasks, today, projectAccent }) {
+  const weekStart = startOfWeek(today);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+      {days.map((d) => {
+        const isToday = isSameDay(d, today);
+        const dayTasks = tasks.filter((t) => t.category === "content" && isSameDay(t.date, d));
+        return (
+          <div key={d.toISOString()} style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: COLORS.muted, fontWeight: 600, marginBottom: 4 }}>{DAY_NAMES[d.getDay()][0]}</div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                fontSize: 11,
+                fontWeight: isToday ? 700 : 500,
+                color: isToday ? COLORS.paper : COLORS.ink,
+                background: isToday ? COLORS.tomato : "transparent",
+                marginBottom: 6,
+              }}
+            >
+              {d.getDate()}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center", minHeight: 8 }}>
+              {dayTasks.slice(0, 3).map((t) => (
+                <div key={t.id} title={t.title} style={{ width: 6, height: 6, borderRadius: "50%", background: projectAccent(t.projectId) }} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- Home ---------- */
+function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, setBoardContent, setTab, setCalMode, setCalCursor }) {
   const viewport = useViewport();
   const today = appToday();
   const weekEnd = addDays(today, 7);
@@ -1109,6 +1204,26 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
   };
 
   const dateLine = `${DAY_NAMES[today.getDay()]}, ${MONTH_NAMES[today.getMonth()]} ${today.getDate()}`;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  const deriveStatus = (pTasks) => {
+    if (pTasks.length === 0) return "Not Started";
+    if (pTasks.every((t) => t.completed)) return "Completed";
+    if (pTasks.some((t) => t.completed)) return "In Progress";
+    return "Not Started";
+  };
+
+  // Not every project, just what's been touched most recently — mirrors the
+  // "recently edited" framing from the reference layout Jenny asked for.
+  // "View all projects" is the escape hatch to the full list.
+  const recentProjects = [...projects].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 4);
+
+  const goToCalendarThisWeek = () => {
+    setCalMode("Week");
+    setCalCursor(appToday());
+    setTab("calendar");
+  };
 
   // Shared row renderer for both the active and completed Today lists —
   // checkbox toggles completion only; clicking the title opens edit mode
@@ -1172,12 +1287,10 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
 
         <span
           onClick={(e) => { e.stopPropagation(); onOpenProject(t.projectId); }}
-          style={{ fontSize: 11, color: COLORS.muted, marginLeft: 8, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline", textDecorationColor: "transparent" }}
-          onMouseEnter={(e) => { e.currentTarget.style.textDecorationColor = COLORS.muted; }}
-          onMouseLeave={(e) => { e.currentTarget.style.textDecorationColor = "transparent"; }}
+          style={{ marginLeft: 8, cursor: "pointer", flexShrink: 0 }}
           title={`Go to ${projectName(t.projectId)}`}
         >
-          {projectName(t.projectId)}
+          <Badge label={projectName(t.projectId)} hex={projectAccent(t.projectId)} />
         </span>
       </div>
     );
@@ -1190,12 +1303,63 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.royalBlue, marginBottom: 8 }}>
           {dateLine}
         </div>
-        <div style={{ fontSize: viewport.isPhone ? 20 : 26, fontWeight: 700, letterSpacing: "0.01em", color: COLORS.tomato }}>
-          {todaysTasksAll.length === 0
-            ? "Nothing scheduled today."
-            : doneToday === todaysTasksAll.length
-            ? "Today's work is done."
-            : `${todaysTasksAll.length - doneToday} ${todaysTasksAll.length - doneToday === 1 ? "thing" : "things"} to make today.`}
+        <div style={{ fontSize: viewport.isPhone ? 20 : 26, fontWeight: 700, letterSpacing: "0.01em", color: COLORS.ink }}>
+          {greeting}, Jenny.
+        </div>
+        <div style={{ fontSize: 13.5, color: COLORS.muted, marginTop: 4 }}>
+          Here's what's happening with your projects.
+        </div>
+      </div>
+
+      {/* My Projects — recently edited, not the full list; "View all" goes to Project View */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+          <SectionLabel color={COLORS.royalBlue}>My Projects</SectionLabel>
+          <span
+            onClick={() => setTab("project")}
+            style={{ fontSize: 11.5, fontWeight: 600, color: COLORS.royalBlue, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+          >
+            View all projects
+            <i className="ti ti-arrow-right" style={{ fontSize: 12 }} aria-hidden="true" />
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12 }}>
+          {recentProjects.length === 0 && (
+            <div style={{ gridColumn: "1 / -1", background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 20, fontSize: 12.5, color: COLORS.muted, fontStyle: "italic" }}>
+              No projects yet — add one from Project View.
+            </div>
+          )}
+          {recentProjects.map((p) => {
+            const a = PROJECT_ACCENTS[p.accentIdx];
+            const pTasks = tasks.filter((t) => t.projectId === p.id);
+            const done = pTasks.filter((t) => t.completed).length;
+            const pct = pTasks.length ? Math.round((done / pTasks.length) * 100) : 0;
+            const status = deriveStatus(pTasks);
+            const product = normalizeProduct(boardContent[p.id + ":product"]);
+            const photo = product.photos.find((ph) => ph.id === product.primaryPhotoId) || product.photos[0];
+            return (
+              <div
+                key={p.id}
+                onClick={() => onOpenProject(p.id)}
+                style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden", cursor: "pointer" }}
+              >
+                <div style={{ height: 110, background: COLORS.cream, borderBottom: `3px solid ${a.hex}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {photo ? (
+                    <img src={photo.dataUrl} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  ) : (
+                    <ProjectIcon icon={p.icon} color={a.hex} size={34} />
+                  )}
+                </div>
+                <div style={{ padding: "10px 12px" }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                    <Badge label={status} hex={status === "Not Started" ? COLORS.muted : a.hex} />
+                    <span style={{ fontSize: 11, color: COLORS.muted }}>{pct}%</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1232,12 +1396,10 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
                   <span style={{ fontSize: 12.5, flex: 1, minWidth: 0 }}>{t.title}</span>
                   <span
                     onClick={(e) => { e.stopPropagation(); onOpenProject(t.projectId); }}
-                    style={{ fontSize: 11, color: COLORS.muted, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline", textDecorationColor: "transparent" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.textDecorationColor = COLORS.muted; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.textDecorationColor = "transparent"; }}
+                    style={{ cursor: "pointer", flexShrink: 0 }}
                     title={`Go to ${projectName(t.projectId)}`}
                   >
-                    {projectName(t.projectId)}
+                    <Badge label={projectName(t.projectId)} hex={projectAccent(t.projectId)} />
                   </span>
                   <span style={{ fontSize: 11, color: COLORS.muted, whiteSpace: "nowrap" }}>
                     {MONTH_NAMES[t.date.getMonth()].slice(0, 3)} {t.date.getDate()}
@@ -1248,41 +1410,16 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
           </div>
         </div>
 
-        {/* Middle: projects */}
+        {/* Middle: this week's content tasks, at a glance */}
         <div>
-          <SectionLabel color={COLORS.royalBlue}>Project Progress Tracker</SectionLabel>
-          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-            {projects.length === 0 && (
-              <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 20, fontSize: 12.5, color: COLORS.muted, fontStyle: "italic" }}>
-                No projects yet — add one from Project View.
-              </div>
-            )}
-            {projects.map((p) => {
-              const a = PROJECT_ACCENTS[p.accentIdx];
-              const pTasks = tasks.filter((t) => t.projectId === p.id);
-              const done = pTasks.filter((t) => t.completed).length;
-              const pct = pTasks.length ? Math.round((done / pTasks.length) * 100) : 0;
-              const next = pTasks.filter((t) => !t.completed).sort((x, y) => x.date - y.date)[0];
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => onOpenProject(p.id)}
-                  style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderLeft: `3px solid ${a.hex}`, borderRadius: RADIUS, padding: "13px 16px", cursor: "pointer" }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
-                    <ProjectIcon icon={p.icon} color={a.hex} size={16} />
-                    <span style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</span>
-                    <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>{pct}%</span>
-                  </div>
-                  <div style={{ height: 3, background: COLORS.hairline, borderRadius: 2, marginBottom: 8 }}>
-                    <div style={{ height: 3, width: `${pct}%`, background: a.hex, borderRadius: 2 }} />
-                  </div>
-                  <div style={{ fontSize: 11, color: COLORS.muted }}>
-                    {next ? `Next: ${next.title}` : "All tasks complete"}
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+            <SectionLabel color={COLORS.royalBlue}>Content Calendar</SectionLabel>
+            <span onClick={goToCalendarThisWeek} style={{ fontSize: 11, fontWeight: 600, color: COLORS.royalBlue, cursor: "pointer" }}>
+              This week →
+            </span>
+          </div>
+          <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 16 }}>
+            <ContentCalendarSnippet tasks={tasks} today={today} projectAccent={projectAccent} />
           </div>
         </div>
 
@@ -1349,7 +1486,7 @@ function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, t
         <TabButton active={tab === "analytics"} onClick={() => setTab("analytics")}>Analytics</TabButton>
       </div>
 
-      {tab === "home" && <HomeLanding projects={projects} tasks={tasks} setTasks={setTasks} onOpenProject={onOpenProject} boardContent={boardContent} setBoardContent={setBoardContent} />}
+      {tab === "home" && <HomeLanding projects={projects} tasks={tasks} setTasks={setTasks} onOpenProject={onOpenProject} boardContent={boardContent} setBoardContent={setBoardContent} setTab={setTab} setCalMode={setCalMode} setCalCursor={setCalCursor} />}
       {tab === "calendar" && (
         <CalendarView
           projects={projects}
