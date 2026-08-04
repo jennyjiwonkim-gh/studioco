@@ -2450,12 +2450,20 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
     return layout;
   };
 
+  // Pointerdown only "arms" a potential drag (no state update, so the task's DOM node
+  // stays mounted). The drag only actually begins — swapping in the ghost, filtering the
+  // task out of dayTasks — once the pointer moves past a small threshold. Without this,
+  // a real double-click's first mousedown would immediately re-render and swap out the
+  // element mid-click, breaking the browser's native double-click detection on the second click.
+  const pendingDragRef = React.useRef(null);
+  const DRAG_THRESHOLD = 4; // px of movement before a press counts as a drag rather than a click
+
   const startDrag = (e, task, dayIso) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     const taskRect = e.currentTarget.getBoundingClientRect();
     const colEl = e.currentTarget.closest("[data-daycol]");
     const colRect = colEl ? colEl.getBoundingClientRect() : taskRect;
-    setDragState({
+    pendingDragRef.current = {
       taskId: task.id,
       origDayIso: dayIso,
       dayIso,
@@ -2467,19 +2475,26 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
       // so the drag ghost doesn't guess a new (wrong) width
       ghostWidth: taskRect.width,
       ghostLeftInCol: taskRect.left - colRect.left,
-    });
+    };
   };
 
   const onMove = (e) => {
-    if (!dragState) return;
-    const deltaY = e.clientY - dragState.pointerStartY;
+    let current = dragState;
+    if (!current) {
+      const pending = pendingDragRef.current;
+      if (!pending) return;
+      const moved = Math.hypot(e.clientX - pending.pointerStartX, e.clientY - pending.pointerStartY);
+      if (moved < DRAG_THRESHOLD) return;
+      current = pending; // just crossed the threshold — begin the drag using this same move event
+    }
+    const deltaY = e.clientY - current.pointerStartY;
     const deltaMinRaw = deltaY / PX_PER_MIN;
     const snappedDelta = Math.round(deltaMinRaw / SNAP_MIN) * SNAP_MIN;
-    let newStart = dragState.origStartMinutes + snappedDelta;
+    let newStart = current.origStartMinutes + snappedDelta;
     newStart = Math.max(HOUR_START * 60, Math.min(newStart, HOUR_END * 60 - 15));
 
     // detect which day column the pointer is over (only relevant in week view)
-    let newDayIso = dragState.dayIso;
+    let newDayIso = current.dayIso;
     if (!singleDay) {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const colEl = el ? el.closest("[data-daycol]") : null;
@@ -2531,13 +2546,14 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
       }
     }
 
-    setDragState((prev) => (prev ? { ...prev, startMinutes: newStart, dayIso: newDayIso } : prev));
+    setDragState((prev) => ({ ...(prev || current), startMinutes: newStart, dayIso: newDayIso }));
   };
 
   const onUp = () => {
     if (edgeHoldTimer.current) { clearTimeout(edgeHoldTimer.current); edgeHoldTimer.current = null; }
     edgeHoldSide.current = null;
     setEdgeSide(null);
+    pendingDragRef.current = null;
     if (!dragState) return;
     const newDay = new Date(dragState.dayIso);
     setTasks((prev) => prev.map((t) => (t.id === dragState.taskId ? { ...t, date: newDay, startMinutes: dragState.startMinutes } : t)));
