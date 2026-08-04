@@ -1093,42 +1093,65 @@ function Badge({ label, hex }) {
   );
 }
 
-// A read-only preview of the current week's content-category tasks — dots
-// colored by project, same visual language MonthGrid already uses for its
-// day cells. Deliberately not interactive beyond the "This week" link that
-// opens the real Master Calendar; this is a snippet, not a second calendar.
-function ContentCalendarSnippet({ tasks, today, projectAccent }) {
+// A read-only preview of the current week's content-category tasks. Day
+// header and task-chip styling deliberately mirror the Master Calendar's own
+// Week view (see WeekGrid/MonthGrid) so this reads as the same calendar, just
+// condensed — not interactive beyond the "This week" link that opens the
+// real thing.
+function ContentCalendarSnippet({ tasks, today, projects, projectAccent }) {
   const weekStart = startOfWeek(today);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const projectName = (id) => (projects.find((p) => p.id === id) || {}).name || "";
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
       {days.map((d) => {
         const isToday = isSameDay(d, today);
-        const dayTasks = tasks.filter((t) => t.category === "content" && isSameDay(t.date, d));
+        const dayTasks = tasks
+          .filter((t) => t.category === "content" && isSameDay(t.date, d))
+          .sort((a, b) => (a.startMinutes ?? 0) - (b.startMinutes ?? 0));
         return (
-          <div key={d.toISOString()} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 9, color: COLORS.muted, fontWeight: 600, marginBottom: 4 }}>{DAY_NAMES[d.getDay()][0]}</div>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 22,
-                height: 22,
-                borderRadius: "50%",
-                fontSize: 11,
-                fontWeight: isToday ? 700 : 500,
-                color: isToday ? COLORS.paper : COLORS.ink,
-                background: isToday ? COLORS.tomato : "transparent",
-                marginBottom: 6,
-              }}
-            >
-              {d.getDate()}
+          <div key={d.toISOString()} style={{ minWidth: 0 }}>
+            <div style={{ textAlign: "center", paddingBottom: 6, borderBottom: `1px solid ${COLORS.hairline}`, marginBottom: 5, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.02em" }}>
+              {DAY_NAMES[d.getDay()][0].toUpperCase()}{" "}
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 17,
+                  height: 17,
+                  lineHeight: "17px",
+                  borderRadius: "50%",
+                  fontSize: 10,
+                  fontWeight: isToday ? 700 : 500,
+                  background: isToday ? COLORS.tomato : "transparent",
+                  color: isToday ? COLORS.paper : COLORS.ink,
+                }}
+              >
+                {d.getDate()}
+              </span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center", minHeight: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 8 }}>
               {dayTasks.slice(0, 3).map((t) => (
-                <div key={t.id} title={t.title} style={{ width: 6, height: 6, borderRadius: "50%", background: projectAccent(t.projectId) }} />
+                <div
+                  key={t.id}
+                  title={`${t.title} — ${projectName(t.projectId)}`}
+                  style={{
+                    background: COLORS.paper,
+                    border: `1px solid ${COLORS.hairline}`,
+                    borderLeft: `3px solid ${projectAccent(t.projectId)}`,
+                    borderRadius: RADIUS,
+                    fontSize: 9,
+                    padding: "3px 4px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {t.title}
+                </div>
               ))}
+              {dayTasks.length > 3 && (
+                <div style={{ fontSize: 8.5, color: COLORS.muted, textAlign: "center" }}>+{dayTasks.length - 3} more</div>
+              )}
             </div>
           </div>
         );
@@ -1419,7 +1442,7 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
             </span>
           </div>
           <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 16 }}>
-            <ContentCalendarSnippet tasks={tasks} today={today} projectAccent={projectAccent} />
+            <ContentCalendarSnippet tasks={tasks} today={today} projects={projects} projectAccent={projectAccent} />
           </div>
         </div>
 
@@ -1473,18 +1496,11 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
 }
 
 function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, tab, setTab, calMode, setCalMode, calCursor, setCalCursor, contentLibrary, setContentLibrary, boardContent, setBoardContent, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
+  // Tab switching lives entirely in the hamburger NavDrawer now — this row
+  // used to duplicate the exact same links, which was redundant once the
+  // drawer covered every tab.
   return (
     <div style={{ padding: "32px 32px 64px" }}>
-      <div style={{ display: "flex", gap: 0, marginBottom: 28, borderBottom: `1px solid ${COLORS.hairline}`, flexWrap: "wrap" }}>
-        <TabButton active={tab === "home"} onClick={() => setTab("home")}>Home</TabButton>
-        <TabButton active={tab === "calendar"} onClick={() => setTab("calendar")}>Master Calendar</TabButton>
-        <TabButton active={tab === "project"} onClick={() => setTab("project")}>Project View</TabButton>
-        <TabButton active={tab === "task"} onClick={() => setTab("task")}>Task View</TabButton>
-        <TabButton active={tab === "library"} onClick={() => setTab("library")}>Content Library</TabButton>
-        <TabButton active={tab === "contacts"} onClick={() => setTab("contacts")}>Contacts</TabButton>
-        <TabButton active={tab === "campaigns"} onClick={() => setTab("campaigns")}>Campaign Library</TabButton>
-        <TabButton active={tab === "analytics"} onClick={() => setTab("analytics")}>Analytics</TabButton>
-      </div>
 
       {tab === "home" && <HomeLanding projects={projects} tasks={tasks} setTasks={setTasks} onOpenProject={onOpenProject} boardContent={boardContent} setBoardContent={setBoardContent} setTab={setTab} setCalMode={setCalMode} setCalCursor={setCalCursor} />}
       {tab === "calendar" && (
@@ -2212,31 +2228,6 @@ function ContactRow({ contact, isEditing, onEdit, onDone, onUpdate, onRemove, ju
       <span style={{ fontSize: 11.5, color: COLORS.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{contact.notes || "—"}</span>
       <span />
     </div>
-  );
-}
-
-function TabButton({ active, children, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        border: "none",
-        background: "none",
-        fontFamily: "inherit",
-        fontSize: 13,
-        fontWeight: active ? 700 : 500,
-        color: active ? COLORS.ink : COLORS.muted,
-        padding: "0 20px 12px 0",
-        marginRight: 4,
-        cursor: "pointer",
-        letterSpacing: "0.05em",
-        textTransform: "uppercase",
-        borderBottom: active ? `2px solid ${COLORS.ink}` : "2px solid transparent",
-        marginBottom: -1,
-      }}
-    >
-      {children}
-    </button>
   );
 }
 
