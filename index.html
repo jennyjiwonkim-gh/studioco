@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic-to@1.5.2/dist/iife/heic-to.js"></script>
 <style>
   /* Theme tokens. Light is the original editorial palette, unchanged.
      Dark is a warm neutral (not blue-grey) so it keeps the same paper-and-ink
@@ -4171,12 +4171,14 @@ function isHeicFile(file) {
 // Downscales an uploaded image before it's stored, since photos are kept as
 // base64 in localStorage (no backend yet) and full-size camera files would
 // burn through that budget after just a few pieces. HEIC files are converted
-// to JPEG first (via heic2any) since the canvas step below can't read them.
+// to JPEG first (via heic-to, which bundles a current libheif build — the
+// more commonly used heic2any is stale/unmaintained and rejects HEIC files
+// from newer iPhones with "format not supported") since the canvas step
+// below can't read HEIC directly.
 async function resizeImageFile(file, maxDim) {
   let sourceBlob = file;
   if (isHeicFile(file)) {
-    const converted = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
-    sourceBlob = Array.isArray(converted) ? converted[0] : converted;
+    sourceBlob = await window.HeicTo({ blob: file, type: "image/jpeg", quality: 0.85 });
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
