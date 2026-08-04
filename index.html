@@ -6554,7 +6554,7 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
 
       {!newTitle && (
         <div style={{ fontSize: 10, color: COLORS.muted, fontStyle: "italic", marginTop: 6 }}>
-          Tip: type "copy tasks [1,2,3] from project [name]" to pull tasks from another project's Making Of list. Click any task, date, or time to edit it. These tasks also appear on the Master Calendar, tagged Craft.
+          Tip: type "copy tasks [1,2,3] from project [name]" to pull tasks from another project's Making Of list. Click any task, date, or time to edit it. These tasks also appear on the Master Calendar, tagged {category === "craft" ? "Craft" : "Content"}.
         </div>
       )}
       {copyHint && copyHint.error && (
