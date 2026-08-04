@@ -1036,7 +1036,7 @@ function NavDrawer({ open, onClose, projects, studioTab, screen, onGoStudioTab, 
 }
 
 /* ---------- Home (new landing screen — placeholder, not yet built out) ---------- */
-function HomeLanding({ projects, tasks, setTasks, onOpenProject }) {
+function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, setBoardContent }) {
   const viewport = useViewport();
   const today = appToday();
   const weekEnd = addDays(today, 7);
@@ -1078,6 +1078,27 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject }) {
   const projectAccent = (id) => {
     const p = projects.find((x) => x.id === id);
     return p ? PROJECT_ACCENTS[p.accentIdx].hex : COLORS.muted;
+  };
+
+  // Same "completed" definition as Project View's deriveStatus: a project with
+  // no tasks isn't done, it just hasn't started — only every task checked off counts.
+  const supplyGroups = projects
+    .map((p) => {
+      const pTasks = tasks.filter((t) => t.projectId === p.id);
+      const isCompleted = pTasks.length > 0 && pTasks.every((t) => t.completed);
+      if (isCompleted) return null;
+      const items = (boardContent[p.id + ":sourcing"] || []).filter((it) => !it.sourced);
+      if (!items.length) return null;
+      return { project: p, items };
+    })
+    .filter(Boolean);
+
+  const toggleSupplySourced = (projectId, itemId) => {
+    const key = projectId + ":sourcing";
+    setBoardContent((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).map((it) => (it.id === itemId ? { ...it, sourced: !it.sourced } : it)),
+    }));
   };
 
   const dateLine = `${DAY_NAMES[today.getDay()]}, ${MONTH_NAMES[today.getMonth()]} ${today.getDate()}`;
@@ -1258,6 +1279,51 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject }) {
           </div>
         </div>
       </div>
+
+      {/* Supplies needed across every not-yet-completed project — pulls from
+          each project's own Supplies list on the Making Of board, so there's
+          nothing new to maintain here. */}
+      <div style={{ marginTop: 28 }}>
+        <SectionLabel color={COLORS.royalBlue}>Supplies Needed</SectionLabel>
+        <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+          {supplyGroups.length === 0 && (
+            <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 20, fontSize: 12.5, color: COLORS.muted, fontStyle: "italic" }}>
+              Nothing outstanding — every active project has what it needs.
+            </div>
+          )}
+          {supplyGroups.map(({ project: p, items }) => {
+            const a = PROJECT_ACCENTS[p.accentIdx];
+            return (
+              <div key={p.id} style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderLeft: `3px solid ${a.hex}`, borderRadius: RADIUS, padding: "13px 16px" }}>
+                <div
+                  onClick={() => onOpenProject(p.id)}
+                  style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, cursor: "pointer" }}
+                >
+                  <ProjectIcon icon={p.icon} color={a.hex} size={16} />
+                  <span style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</span>
+                  <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>
+                    {items.length} {items.length === 1 ? "item" : "items"}
+                  </span>
+                </div>
+                {items.map((it) => (
+                  <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                    <div
+                      onClick={() => toggleSupplySourced(p.id, it.id)}
+                      style={{
+                        width: 14, height: 14, flexShrink: 0, cursor: "pointer",
+                        border: `1.5px solid ${COLORS.hairline}`,
+                        borderRadius: 2,
+                      }}
+                    />
+                    <span style={{ fontSize: 12.5, flex: 1, minWidth: 0 }}>{it.name}</span>
+                    {it.note && <span style={{ fontSize: 11, color: COLORS.muted, whiteSpace: "nowrap" }}>{it.note}</span>}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1276,7 +1342,7 @@ function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, t
         <TabButton active={tab === "analytics"} onClick={() => setTab("analytics")}>Analytics</TabButton>
       </div>
 
-      {tab === "home" && <HomeLanding projects={projects} tasks={tasks} setTasks={setTasks} onOpenProject={onOpenProject} />}
+      {tab === "home" && <HomeLanding projects={projects} tasks={tasks} setTasks={setTasks} onOpenProject={onOpenProject} boardContent={boardContent} setBoardContent={setBoardContent} />}
       {tab === "calendar" && (
         <CalendarView
           projects={projects}
