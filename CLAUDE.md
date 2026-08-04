@@ -101,14 +101,16 @@ on deliverables.
 
 ## Outstanding work
 
-1. Verify the Supabase integration against the live project (never tested with
-   real network — only stubbed endpoints).
+1. ~~Verify the Supabase integration against the live project.~~ Done — live
+   auth + `app_state` persistence confirmed working end-to-end.
 2. Real AI-powered "Copy tasks" — currently exact-phrase matching; needs genuine
    natural-language interpretation plus a confirm-before-applying step.
-3. Freeform image/screenshot paste on the Inspiration board (sketch/text/eraser
-   already work).
-4. Full Office-style color picker — check scope against the existing
-   `ColorPickerPopover` before rebuilding anything.
+3. Freeform image/screenshot paste on the Inspiration and Planning board
+   (sketch/text/eraser already work).
+4. ~~Full Office-style color picker.~~ Done — `ColorPickerPopover`
+   (brand presets + saturation/value square + hue slider + hex/RGB fields) is
+   live in the Inspiration and Planning board's canvas toolbar and reused for
+   Listing board color swatches.
 5. AI-generated storefront that reads a project's visual "vibe" from its photos.
    Its own feature; do not ship a shallow version.
 6. Real Instagram / Shopify / Etsy integrations — need OAuth and a backend.

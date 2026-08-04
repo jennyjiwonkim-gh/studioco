@@ -2403,6 +2403,7 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
   const [newTaskPrompt, setNewTaskPrompt] = useState(null); // { dayIso, startMinutes }
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskProjectId, setNewTaskProjectId] = useState(projects[0]?.id || "");
+  const [editDraft, setEditDraft] = useState(null); // { id, title, projectId, dateStr, timeStr, durationMinutes }
   const columnRefs = React.useRef({});
   const edgeHoldTimer = React.useRef(null);
   const edgeHoldSide = React.useRef(null);
@@ -2551,6 +2552,49 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
     return hr + (m > 0 ? ":" + String(m).padStart(2, "0") : "") + " " + period;
   };
 
+  const fmtTimeInput = (mins) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  };
+
+  const openEditTask = (t) => {
+    const d = t.date;
+    const pad = (n) => String(n).padStart(2, "0");
+    setEditDraft({
+      id: t.id,
+      title: t.title,
+      projectId: t.projectId,
+      dateStr: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      timeStr: fmtTimeInput(t.startMinutes),
+      durationMinutes: t.durationMinutes,
+    });
+  };
+
+  const saveEditTask = () => {
+    if (!editDraft) return;
+    const title = editDraft.title.trim();
+    if (!title || !editDraft.projectId) return;
+    const [y, mo, da] = editDraft.dateStr.split("-").map(Number);
+    const [h, mi] = editDraft.timeStr.split(":").map(Number);
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === editDraft.id
+          ? { ...t, title, projectId: editDraft.projectId, date: new Date(y, mo - 1, da), startMinutes: h * 60 + mi, durationMinutes: editDraft.durationMinutes }
+          : t
+      )
+    );
+    setEditDraft(null);
+  };
+
+  const deleteEditTask = () => {
+    if (!editDraft) return;
+    if (window.confirm("Delete this task? This cannot be undone.")) {
+      setTasks((prev) => prev.filter((t) => t.id !== editDraft.id));
+      setEditDraft(null);
+    }
+  };
+
   const submitNewTask = () => {
     const title = newTaskTitle.trim();
     if (!title || !newTaskProjectId || !newTaskPrompt) return;
@@ -2657,6 +2701,7 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
                     <div
                       key={t.id}
                       onPointerDown={(e) => startDrag(e, t, dayIso)}
+                      onDoubleClick={(e) => { e.stopPropagation(); openEditTask(t); }}
                       style={{
                         position: "absolute",
                         top,
@@ -2677,7 +2722,7 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
                         userSelect: "none",
                         WebkitUserSelect: "none",
                       }}
-                      title={t.title + " — " + projectName(t.projectId) + " — drag to reschedule (15 min steps)"}
+                      title={t.title + " — " + projectName(t.projectId) + " — drag to reschedule, double-click to edit"}
                     >
                       {t.category && (
                         <i
@@ -2743,7 +2788,7 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
           })}
         </div>
         <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 10, fontStyle: "italic" }}>
-          Press and drag any task to reschedule — snaps to 15-minute steps. Double-click a blank slot to add a task.
+          Press and drag any task to reschedule — snaps to 15-minute steps. Double-click a task to edit it, or double-click a blank slot to add one.
           {singleDay && " Drag past the edge and hold to move to the next or previous day."}
         </div>
       </div>
@@ -2852,6 +2897,139 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
             >
               Add task
             </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {editDraft && (
+      <div
+        onClick={() => setEditDraft(null)}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(17,17,17,0.35)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 2000,
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: COLORS.paper,
+            border: `1px solid ${COLORS.hairline}`,
+            borderRadius: RADIUS,
+            padding: 24,
+            width: 320,
+            boxShadow: "0 8px 28px rgba(0,0,0,0.18)",
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Edit task</div>
+
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: COLORS.muted, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 6 }}>Task</div>
+          <input
+            autoFocus
+            value={editDraft.title}
+            onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === "Enter") saveEditTask(); if (e.key === "Escape") setEditDraft(null); }}
+            placeholder="Task title…"
+            style={{
+              width: "100%",
+              background: COLORS.cream,
+              border: `1px solid ${COLORS.hairline}`,
+              borderRadius: RADIUS,
+              padding: "9px 12px",
+              fontSize: 13,
+              fontFamily: "inherit",
+              color: COLORS.ink,
+              marginBottom: 14,
+            }}
+          />
+
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: COLORS.muted, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 6 }}>Project</div>
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <select
+              value={editDraft.projectId}
+              onChange={(e) => setEditDraft((prev) => ({ ...prev, projectId: e.target.value }))}
+              style={{
+                width: "100%",
+                background: COLORS.paper,
+                border: `1px solid ${COLORS.ink}`,
+                borderRadius: RADIUS,
+                padding: "9px 28px 9px 12px",
+                fontSize: 13,
+                fontFamily: "inherit",
+                fontWeight: 500,
+                color: COLORS.ink,
+                cursor: "pointer",
+                appearance: "none",
+                WebkitAppearance: "none",
+              }}
+            >
+              {sortedProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <DropdownArrow />
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: COLORS.muted, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 6 }}>Date</div>
+              <input
+                type="date"
+                value={editDraft.dateStr}
+                onChange={(e) => setEditDraft((prev) => ({ ...prev, dateStr: e.target.value }))}
+                style={{
+                  width: "100%",
+                  background: COLORS.cream,
+                  border: `1px solid ${COLORS.hairline}`,
+                  borderRadius: RADIUS,
+                  padding: "8px 10px",
+                  fontSize: 12.5,
+                  fontFamily: "inherit",
+                  color: COLORS.ink,
+                }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: COLORS.muted, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 6 }}>Time</div>
+              <input
+                type="time"
+                value={editDraft.timeStr}
+                onChange={(e) => setEditDraft((prev) => ({ ...prev, timeStr: e.target.value }))}
+                style={{
+                  width: "100%",
+                  background: COLORS.cream,
+                  border: `1px solid ${COLORS.hairline}`,
+                  borderRadius: RADIUS,
+                  padding: "8px 10px",
+                  fontSize: 12.5,
+                  fontFamily: "inherit",
+                  color: COLORS.ink,
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button
+              onClick={deleteEditTask}
+              style={{ ...navBtnStyle, color: COLORS.tomato, borderColor: COLORS.tomato }}
+            >
+              Delete
+            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setEditDraft(null)} style={navBtnStyle}>Cancel</button>
+              <button
+                onClick={saveEditTask}
+                style={{ ...navBtnStyle, background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.ink}` }}
+              >
+                Save
+              </button>
+            </div>
           </div>
         </div>
       </div>
