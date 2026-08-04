@@ -1192,7 +1192,7 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1fr", gap: viewport.isPhone ? 32 : 28, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1fr 1fr", gap: viewport.isPhone ? 32 : 28, alignItems: "start" }}>
         {/* Left: today + week ahead */}
         <div>
           <SectionLabel color={COLORS.royalBlue}>Today</SectionLabel>
@@ -1241,7 +1241,7 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
           </div>
         </div>
 
-        {/* Right: projects */}
+        {/* Middle: projects */}
         <div>
           <SectionLabel color={COLORS.royalBlue}>Project Progress Tracker</SectionLabel>
           <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
@@ -1278,50 +1278,50 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
             })}
           </div>
         </div>
-      </div>
 
-      {/* Supplies needed across every not-yet-completed project — pulls from
-          each project's own Supplies list on the Making Of board, so there's
-          nothing new to maintain here. */}
-      <div style={{ marginTop: 28 }}>
-        <SectionLabel color={COLORS.royalBlue}>Supplies Needed</SectionLabel>
-        <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-          {supplyGroups.length === 0 && (
-            <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 20, fontSize: 12.5, color: COLORS.muted, fontStyle: "italic" }}>
-              Nothing outstanding — every active project has what it needs.
-            </div>
-          )}
-          {supplyGroups.map(({ project: p, items }) => {
-            const a = PROJECT_ACCENTS[p.accentIdx];
-            return (
-              <div key={p.id} style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderLeft: `3px solid ${a.hex}`, borderRadius: RADIUS, padding: "13px 16px" }}>
-                <div
-                  onClick={() => onOpenProject(p.id)}
-                  style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, cursor: "pointer" }}
-                >
-                  <ProjectIcon icon={p.icon} color={a.hex} size={16} />
-                  <span style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</span>
-                  <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>
-                    {items.length} {items.length === 1 ? "item" : "items"}
-                  </span>
-                </div>
-                {items.map((it) => (
-                  <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-                    <div
-                      onClick={() => toggleSupplySourced(p.id, it.id)}
-                      style={{
-                        width: 14, height: 14, flexShrink: 0, cursor: "pointer",
-                        border: `1.5px solid ${COLORS.hairline}`,
-                        borderRadius: 2,
-                      }}
-                    />
-                    <span style={{ fontSize: 12.5, flex: 1, minWidth: 0 }}>{it.name}</span>
-                    {it.note && <span style={{ fontSize: 11, color: COLORS.muted, whiteSpace: "nowrap" }}>{it.note}</span>}
-                  </div>
-                ))}
+        {/* Right: supplies needed across every not-yet-completed project —
+            pulls from each project's own Supplies list on the Making Of
+            board, so there's nothing new to maintain here. */}
+        <div>
+          <SectionLabel color={COLORS.royalBlue}>Supplies Needed</SectionLabel>
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            {supplyGroups.length === 0 && (
+              <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 20, fontSize: 12.5, color: COLORS.muted, fontStyle: "italic" }}>
+                Nothing outstanding — every active project has what it needs.
               </div>
-            );
-          })}
+            )}
+            {supplyGroups.map(({ project: p, items }) => {
+              const a = PROJECT_ACCENTS[p.accentIdx];
+              return (
+                <div key={p.id} style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderLeft: `3px solid ${a.hex}`, borderRadius: RADIUS, padding: "13px 16px" }}>
+                  <div
+                    onClick={() => onOpenProject(p.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, cursor: "pointer" }}
+                  >
+                    <ProjectIcon icon={p.icon} color={a.hex} size={16} />
+                    <span style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</span>
+                    <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>
+                      {items.length} {items.length === 1 ? "item" : "items"}
+                    </span>
+                  </div>
+                  {items.map((it) => (
+                    <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                      <div
+                        onClick={() => toggleSupplySourced(p.id, it.id)}
+                        style={{
+                          width: 14, height: 14, flexShrink: 0, cursor: "pointer",
+                          border: `1.5px solid ${COLORS.hairline}`,
+                          borderRadius: 2,
+                        }}
+                      />
+                      <span style={{ fontSize: 12.5, flex: 1, minWidth: 0 }}>{it.name}</span>
+                      {it.note && <span style={{ fontSize: 11, color: COLORS.muted, whiteSpace: "nowrap" }}>{it.note}</span>}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -6048,6 +6048,20 @@ function MakingOfBoard({ allTasks, setAllTasks, currentProjectId, accentHex, pro
   const projectCraftTasks = allTasks.filter((t) => t.projectId === currentProjectId && t.category === "craft");
   const [newSupplyName, setNewSupplyName] = useState("");
   const [newSupplyNote, setNewSupplyNote] = useState("");
+  // Click-to-edit, same pattern as CategoryTaskTable's craft task rows below.
+  const [editingSupplyId, setEditingSupplyId] = useState(null);
+  const editingSupplyRowRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!editingSupplyId) return;
+    const handleOutsideClick = (e) => {
+      if (editingSupplyRowRef.current && !editingSupplyRowRef.current.contains(e.target)) {
+        setEditingSupplyId(null);
+      }
+    };
+    document.addEventListener("pointerdown", handleOutsideClick);
+    return () => document.removeEventListener("pointerdown", handleOutsideClick);
+  }, [editingSupplyId]);
 
   const addSupply = () => {
     const name = newSupplyName.trim();
@@ -6059,6 +6073,10 @@ function MakingOfBoard({ allTasks, setAllTasks, currentProjectId, accentHex, pro
 
   const toggleSourced = (id) => {
     setSourcingItems((prev) => prev.map((it) => (it.id === id ? { ...it, sourced: !it.sourced } : it)));
+  };
+
+  const updateSupplyField = (id, field, value) => {
+    setSourcingItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)));
   };
 
   const removeSupply = (id) => {
@@ -6089,43 +6107,90 @@ function MakingOfBoard({ allTasks, setAllTasks, currentProjectId, accentHex, pro
       )}
 
       <div style={{ marginBottom: 16 }}>
-        {sortedSupplies.map((it) => (
-          <div
-            key={it.id}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "20px 1fr auto 24px",
-              alignItems: "center",
-              gap: 12,
-              padding: "9px 10px",
-              borderBottom: `1px solid ${COLORS.hairline}`,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={it.sourced}
-              onChange={() => toggleSourced(it.id)}
-              style={{ accentColor: accentHex, cursor: "pointer" }}
-            />
-            <span
+        {sortedSupplies.map((it) => {
+          const isEditing = editingSupplyId === it.id;
+          const supplyFieldStyle = {
+            background: COLORS.cream,
+            border: `1px solid ${COLORS.hairline}`,
+            borderRadius: RADIUS,
+            padding: "5px 8px",
+            fontSize: 12.5,
+            fontFamily: "inherit",
+            color: COLORS.ink,
+            width: "100%",
+          };
+          return (
+            <div
+              key={it.id}
+              ref={isEditing ? editingSupplyRowRef : null}
               style={{
-                fontSize: 13,
-                textDecoration: it.sourced ? "line-through" : "none",
-                opacity: it.sourced ? 0.45 : 1,
+                display: "grid",
+                gridTemplateColumns: "20px 1fr auto 24px",
+                alignItems: "center",
+                gap: 12,
+                padding: "9px 10px",
+                borderBottom: `1px solid ${COLORS.hairline}`,
               }}
             >
-              {it.name}
-            </span>
-            <span style={{ fontSize: 11.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{it.note}</span>
-            <button
-              onClick={() => removeSupply(it.id)}
-              title="Remove"
-              style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.muted, padding: 0, lineHeight: 1, justifySelf: "end" }}
-            >
-              <i className="ti ti-x" style={{ fontSize: 14 }} aria-hidden="true" />
-            </button>
-          </div>
-        ))}
+              <input
+                type="checkbox"
+                checked={it.sourced}
+                onChange={() => toggleSourced(it.id)}
+                style={{ accentColor: accentHex, cursor: "pointer" }}
+              />
+              {isEditing ? (
+                <input
+                  autoFocus
+                  value={it.name}
+                  onChange={(e) => updateSupplyField(it.id, "name", e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingSupplyId(null); }}
+                  style={supplyFieldStyle}
+                />
+              ) : (
+                <span
+                  onClick={() => setEditingSupplyId(it.id)}
+                  style={{
+                    fontSize: 13,
+                    textDecoration: it.sourced ? "line-through" : "none",
+                    opacity: it.sourced ? 0.45 : 1,
+                    cursor: "text",
+                  }}
+                >
+                  {it.name}
+                </span>
+              )}
+              {isEditing ? (
+                <input
+                  value={it.note}
+                  onChange={(e) => updateSupplyField(it.id, "note", e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingSupplyId(null); }}
+                  placeholder="Quantity / notes"
+                  style={{ ...supplyFieldStyle, width: 140 }}
+                />
+              ) : (
+                <span
+                  onClick={() => setEditingSupplyId(it.id)}
+                  style={{ fontSize: 11.5, color: COLORS.muted, whiteSpace: "nowrap", cursor: "text" }}
+                >
+                  {it.note}
+                </span>
+              )}
+              {isEditing ? (
+                <button onClick={() => setEditingSupplyId(null)} title="Done editing" style={{ background: "none", border: "none", cursor: "pointer", color: accentHex, padding: 0, justifySelf: "end" }}>
+                  <i className="ti ti-check" style={{ fontSize: 14 }} aria-hidden="true" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => removeSupply(it.id)}
+                  title="Remove"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.muted, padding: 0, lineHeight: 1, justifySelf: "end" }}
+                >
+                  <i className="ti ti-x" style={{ fontSize: 14 }} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 200px auto", gap: 8, marginBottom: 28 }}>
