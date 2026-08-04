@@ -6576,6 +6576,11 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
    can work on one at a time without losing sight of the others. */
 function ContentBoard({ boardData, setBoardData, allTasks, setAllTasks, currentProjectId, accentHex, projects, contentLibrary, setContentLibrary }) {
   const pieces = boardData.pieces || [];
+  // Content tasks not tied to any piece — e.g. added before this project had any
+  // pieces, or left behind when a piece was removed (see removePiece's comment).
+  // Without this, they're invisible here even though they still show on the
+  // Calendar and Home — same unconditional-list pattern the Craft board uses.
+  const unassignedTasks = allTasks.filter((t) => t.projectId === currentProjectId && t.category === "content" && !t.contentPieceId);
   // Every piece is expanded by default; a piece only collapses when its own
   // toggle is explicitly clicked, and multiple pieces can stay open at once.
   const [collapsedIds, setCollapsedIds] = useState(() => new Set());
@@ -6616,6 +6621,23 @@ function ContentBoard({ boardData, setBoardData, allTasks, setAllTasks, currentP
 
   return (
     <div style={{ padding: "24px 28px" }}>
+      <div style={{ marginBottom: 24 }}>
+        <SectionLabel>Unassigned tasks</SectionLabel>
+        <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 4, marginBottom: 10 }}>
+          Content tasks not yet tied to a specific piece below — add one directly, or use "Add content piece" to organize it under a post, reel, or carousel.
+        </div>
+        <CategoryTaskTable
+          tasks={unassignedTasks}
+          setAllTasks={setAllTasks}
+          currentProjectId={currentProjectId}
+          accentHex={accentHex}
+          projects={projects}
+          allTasks={allTasks}
+          category="content"
+          columnLabel="Task: Content"
+        />
+      </div>
+
       {pieces.length === 0 && (
         <div style={{ fontSize: 12.5, color: COLORS.muted, fontStyle: "italic", marginBottom: 16 }}>
           No content pieces yet — add one to start planning a post, reel, or carousel for this project.
