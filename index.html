@@ -354,12 +354,16 @@ const SEED_TASKS = REAL_TASKS;
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-/* The prototype's fixed "today". The seeded demo tasks are dated around this
-   day, so pinning it keeps the Calendar's today-highlight, the dashboard's
-   "This week", and the Home screen all agreeing with each other.
-   Returns a new Date each call so no caller can mutate a shared instance.
-   Swap the body for `new Date()` when real task data is wired in. */
-function appToday() { return new Date(2026, 6, 27); }
+/* Today, at local midnight — matches the system clock. Returns a new Date each
+   call so no caller can mutate a shared instance. Zeroed to midnight (rather
+   than the exact current time) so isSameDay comparisons and the various
+   `.toISOString().slice(0, 10)` date-stamping call sites stay stable all day
+   and land on the correct local calendar date. */
+function appToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 function isSameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
 function startOfWeek(d){const r=new Date(d);r.setDate(r.getDate()-r.getDay());r.setHours(0,0,0,0);return r;}
