@@ -7,87 +7,125 @@ Netlify (auto-builds from GitHub on push to `main`), backed by Supabase for
 persistence.
 
 ## Current Status (as of this session, 2026-08-06)
-- Live site is still exactly commit `0bf4483` (last session's push) — **no
-  app code changed this session**, docs only.
-- Local commit **`75e4b44`** sits on top of that, containing this session's
-  full documentation restructure (see below). **Explicitly not pushed** —
-  Jenny asked directly not to push to `main` for this. Push whenever she
-  says so; nothing time-sensitive about it.
-- Netlify is still on the Personal plan (1,000 credits/mo). Jenny corrected
-  an assumption this session: don't treat that upgrade as removing cost
-  concerns — stay frugal about triggering deploys on principle, not just as
-  a policy against running out. Codified in both memory
-  (`feedback_frugal_netlify_credits.md`) and now `CLAUDE.md`'s "Deploy loop"
-  section directly, so it's durable in the repo itself, not just my memory.
+- Live site is now commit **`21dab6f`** — pushed to `main` and confirmed
+  deployed (Netlify production deploy `ready`, `error_message: null`,
+  `commit_ref` matches). This was a real feature/fix session, not docs-only.
+- Verified via a Netlify deploy preview (PR #2, branch
+  `verify-session-fixes-2026-08-06`) before pushing: console clean, and the
+  served bundle was confirmed to contain every change below by inspecting
+  the raw HTML for distinctive markers. Full authenticated click-through
+  wasn't possible on the preview subdomain (separate origin, no shared
+  login session, and entering Jenny's password is off-limits regardless) —
+  that gap was already covered by thorough functional testing against the
+  same live Supabase backend via the local static server beforehand.
+- PR #2 and the `verify-session-fixes-2026-08-06` branch (local + remote)
+  have been deleted — GitHub auto-marked the PR merged once `main` picked up
+  the same commits via direct push, and the local branch deleted cleanly
+  with `git branch -d` (git recognized it as fully merged, confirming
+  nothing was orphaned).
 
 ## What Changed This Session
 
-### 1. Documentation restructure — TODO.md / PLAN.md carved out
-`CLAUDE.md`'s "Outstanding work" and `handoff.md`'s "Exact Next Steps" /
-"Open Question" sections were getting heavy. Split into two new files:
-- **`TODO.md`** (new) — flat standing backlog, no dates/narrative. Holds the
-  5 feature items formerly in `CLAUDE.md` (AI copy-tasks, freeform paste,
-  storefront vibe reader, real IG/Shopify/Etsy integrations, Home screen
-  content) plus the still-unresolved `savePersisted` silent-failure item.
-- **`PLAN.md`** (new) — single active initiative only: the project landing
-  page redesign (`ProjectDashboard`/`BoardScreen`), with the reference
-  Artifact link and concrete steps. Gets replaced wholesale, not
-  accumulated, when the active initiative changes.
-- **`CLAUDE.md`** — "Outstanding work" replaced with a pointer to `TODO.md`.
-  New **"Documentation file allocation"** section added, spelling out each
-  of the four `.md` files' job and instructing: every time `handoff.md` is
-  written (i.e. end of session), cross-check `TODO.md`/`PLAN.md` against
-  what actually happened and reconcile them. This session is the first time
-  following that instruction — checked both; no items needed updating
-  (nothing on either list was touched this session).
-- **`handoff.md`** — trimmed to point at `PLAN.md`/`TODO.md` instead of
-  carrying "Exact Next Steps"/"Open Question" directly. This is also the
-  **first commit `handoff.md` has ever had** — it existed as an untracked
-  file across prior sessions until now.
+### 1. Fixed `savePersisted` silently swallowing failed saves
+Previously a failed write only did `console.warn` — no UI sign, no retry.
+Now:
+- Failed writes are tracked and **auto-retried every 5s** until they
+  succeed (`pendingRetries` map + `scheduleRetry`).
+- A **"⚠ Not saved" indicator** appears in `TopBar` (tomato text, matching
+  the existing nav-drawer warning convention) whenever a write is failing,
+  clearing once it recovers. Collapses to icon-only on phone widths.
+- Caught a real, live transient Supabase `503` on `app_state` writes while
+  testing against Jenny's actual account — self-resolved before the
+  simulated-failure test even started, a good real-world confirmation the
+  retry logic earns its keep.
 
-### 2. Netlify credit philosophy reaffirmed
-Jenny explicitly corrected the assistant for framing the Free→Personal plan
-upgrade as meaning credits are "no longer a real cost concern." Standing
-instruction going forward: keep minimizing deploys on principle regardless
-of plan tier, keep preferring deploy previews over `main` pushes, never push
-to `main` without her explicit go-ahead. See `CLAUDE.md`'s Deploy loop
-section and memory `feedback_frugal_netlify_credits.md`.
+### 2. Fixed stale-tab `pagehide` overwrite bug
+`usePersistentState`'s `pagehide` flush used to unconditionally re-save a
+tab's last-known in-memory value on every close/reload — including an idle
+tab with nothing new to write. That could silently clobber a newer edit
+saved from another tab or device in the meantime (same last-write-wins class
+as the earlier photo data-loss bug, just not yet fixed for
+`tasks`/`projects`/`boardContent`/etc.).
 
-### 3. Housekeeping notes (no action taken)
-- `Pottery tracker landing page.zip`, `marina_vase.HEIC`, and
-  `mccall_bowls.heic` — present at the start of this session, gone from disk
-  by the time of the commit. Not caused by anything in this session (never
-  staged/touched), never tracked by git either way. Flagging in case it's
-  unexpected on Jenny's end; no cleanup performed.
-- A new untracked file, `StudioCo Landing/image-gen-1.png` (dated today),
-  appeared during this session — also not created by anything done here.
-- Confirmed the `Pottery tracker landing page.zip` (before it disappeared)
-  was a claude.ai web design-tool export (`.dc` file, `image-slot.js`/
-  `support.js` scaffolding, pasted screenshots + a `studioco-v50.html` and
-  `uploads/CLAUDE.md`) — not something this Claude Code session or any
-  previous one produced.
-- Jenny confirmed she's fine with the rest of the untracked repo contents
-  (`.claude/`, `Archive/`, `Redesign/`, `SaleCo/`, `StudioCo Landing/`)
-  staying as-is — no cleanup requested, nothing actioned.
+Fix: `usePersistentState` now tracks a `dirty` ref, true only while a value
+change is genuinely unsaved. `savePersisted` now returns success/failure so
+the debounce effect only clears `dirty` once a save actually lands (and only
+if nothing newer has superseded it in the meantime). The `pagehide` flush
+checks `dirty` before writing anything.
+
+Verified directly against the live account both ways:
+- Idle tab + out-of-band write from "another device" + reload → the newer
+  write survives untouched (previously would've been clobbered).
+- Genuine mid-typing edit + immediate `pagehide` → still flushes correctly,
+  no regression on the original "don't lose last keystrokes" behavior.
+
+### 3. Content board fixes (Jenny's requests)
+- **Series/Type dropdowns are now clearable.** `LibraryPickerField` gets a
+  "— Clear —" option once a value is set (previously the only way back to
+  blank was the disabled placeholder option, which native `<select>` won't
+  let you re-select).
+- **Unassigned content tasks can now be assigned to a content piece.**
+  `CategoryTaskTable` gained an optional `pieceOptions` prop — only wired up
+  from the Content board's "Unassigned tasks" table — adding a "Piece"
+  column with a per-row dropdown. Picking a piece moves the task into that
+  piece's own task list immediately.
+- **New "Platform" field** on content pieces (Instagram/TikTok/YouTube),
+  same clearable `LibraryPickerField` component, so it inherited the clear
+  fix for free. Backing "Platform" list added to the Content Library screen
+  (3rd column next to Content types/Series), with the same
+  add/rename/remove pattern.
+  - Existing accounts' saved `contentLibrary` predates this field — handled
+    with a merge (`{ ...CONTENT_LIBRARY_SEED, ...persisted.contentLibrary }`)
+    rather than the old all-or-nothing `??` fallback, so `platforms` gets a
+    sensible default without needing a data migration script or losing
+    already-saved types/series. Verified Jenny's real custom series entries
+    ("Found Online, Made Offline", "Jutsu") survived intact.
+  - Analytics' "Platform" column for content rows used to read `piece.type`
+    (a stand-in from before real platforms existed) — now reads the real
+    `piece.platform` field, so it's no longer mislabeling content type as
+    platform next to genuine listing platforms like Shopify.
+
+### 4. New Scratchpad page
+Freeform notes page — one big autosaving `<textarea>`, new `scratchpad`
+persisted key (added to `PERSIST_KEYS`), added to `STUDIO_NAV_TABS` so it
+shows in both the top tab row and the nav drawer automatically. Bauhaus
+background icon: `roundBulb` / royal blue (previously-unused icon+color
+combo).
+
+### 5. Home dashboard project photos: 3:4 portrait ratio
+Swapped the fixed `height: 172` on the "My Projects" card image container
+for `aspectRatio: "3 / 4"`, so photos stay portrait at any card width
+instead of stretching wide on desktop.
 
 ## Next Steps
-See `PLAN.md` for the active initiative (landing page redesign) and
-`TODO.md` for the backlog. Nothing session-specific left open beyond those —
-this was a pure documentation-hygiene session.
+See `PLAN.md` for the active initiative (landing page redesign — not
+started, no change this session) and `TODO.md` for the backlog (unchanged
+this session; everything raised was resolved same-session, not deferred).
 
 ## Testing Environment Notes (carries forward)
-- No Node/npm available in the shell environment as of the last session that
-  needed it (2026-08-06 photo-fix session) — the esbuild syntax-check step
-  from `CLAUDE.md`'s testing methodology couldn't run then. Worth
-  re-checking whether Node is available next time a code change (not just
-  docs) needs testing.
-- A PowerShell `HttpListener` static file server was left running across
-  sessions on `http://127.0.0.1:8744/`, serving the whole repo root (script
-  lives in a session scratchpad, not the repo) — last confirmed live
-  2026-08-06. Not touched this session (no code testing needed). Reuse
-  rather than starting a new one on the same port if still alive.
-- `.claude/worktrees/agile-mixing-cat/` still exists with a stale
-  `index.html`/`home-redesign-preview.html` (last touched 2026-08-05) —
-  `redesign-concept.html` inside it is the reference file `PLAN.md` points
-  to for the landing-page redesign, so keep the worktree until that's done;
-  safe to clean up after.
+- Node/npm still unavailable in the shell environment (checked again this
+  session) — the esbuild syntax-check step from `CLAUDE.md`'s testing
+  methodology still can't run. All syntax verification this session was via
+  loading the app in a real browser and checking for Babel/console errors,
+  which reliably catches JSX syntax breaks the same way esbuild would.
+- The PowerShell `HttpListener` static file server on `http://127.0.0.1:8744/`
+  is still running and was reused throughout this session — confirmed live
+  and serving current repo contents. Keep reusing it rather than starting a
+  duplicate on the same port.
+- **New learning:** this Netlify project's deploy previews only build for an
+  actual **pull request**, not just a pushed branch — pushing a branch alone
+  (`https://<branch>--studioco-app.netlify.app/`) 404s ("Site not found").
+  Opening a PR against it (`gh pr create`) triggers the real preview build
+  at `https://deploy-preview-<PR#>--studioco-app.netlify.app/`. Worth
+  remembering for `PLAN.md`'s step 6 next time a preview is needed.
+- Deploy-preview subdomains are a separate origin from both the production
+  site and the local dev server — no shared `localStorage`/login session.
+  Full authenticated UI testing on a preview build isn't possible without
+  either logging in there (needs Jenny's credentials, which is off-limits)
+  or relying on prior local testing against the same backend to cover
+  behavior, and confirming the right code shipped by inspecting the served
+  bundle directly.
+- `.claude/worktrees/agile-mixing-cat/` still exists, untouched this
+  session — `redesign-concept.html` inside it is still the reference file
+  `PLAN.md` points to for the landing-page redesign. Keep until that
+  initiative is done; safe to clean up after.
