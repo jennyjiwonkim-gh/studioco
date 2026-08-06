@@ -753,13 +753,6 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   const goHome = () => goStudioTab("home");
 
   const activeProject = (screen.name === "projectDashboard" || screen.name === "board" || screen.name === "product") ? projects.find((p) => p.id === screen.projectId) : null;
-  const activeBoard = screen.name === "board" ? BOARD_STAGES.find((b) => b.key === screen.boardKey) : null;
-  const activeBoardIdx = activeBoard ? BOARD_STAGES.findIndex((b) => b.key === screen.boardKey) : -1;
-
-  const breadcrumb = [{ label: "Home", onClick: goHome }];
-  if (activeProject) breadcrumb.push({ label: activeProject.name, onClick: () => goProject(activeProject.id) });
-  if (activeBoard) breadcrumb.push({ label: String(activeBoardIdx + 1).padStart(2, "0") + " " + activeBoard.label, onClick: null });
-  if (screen.name === "product") breadcrumb.push({ label: "Product", onClick: null });
 
   // Project Dashboard and every board page belong to the same project, so
   // they always anchor bottom-right with that project's own icon and color.
@@ -776,7 +769,6 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
       <PageBackgroundIcon icon={bgIconProps.icon} color={bgIconProps.color} corner={bgIconProps.corner} />
       <TopBar
         onLogoClick={goHome}
-        breadcrumb={breadcrumb}
         onMenuClick={() => setNavOpen(true)}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -874,12 +866,9 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   );
 }
 
-function TopBar({ onLogoClick, breadcrumb, onMenuClick, theme, onToggleTheme, viewport }) {
+function TopBar({ onLogoClick, onMenuClick, theme, onToggleTheme, viewport }) {
   const compact = viewport && viewport.isCompact;
   const phone = viewport && viewport.isPhone;
-  // On a phone there isn't room for the full trail, so only show where you
-  // are now (the last crumb) rather than the whole path back to Home.
-  const visibleCrumbs = phone && breadcrumb && breadcrumb.length > 1 ? [breadcrumb[breadcrumb.length - 1]] : breadcrumb;
 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: compact ? "12px 14px" : "16px 32px", borderBottom: `1px solid ${COLORS.ink}`, background: COLORS.paper, gap: 8 }}>
@@ -902,33 +891,6 @@ function TopBar({ onLogoClick, breadcrumb, onMenuClick, theme, onToggleTheme, vi
             </span>
           )}
         </div>
-
-        {visibleCrumbs && visibleCrumbs.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, borderLeft: `1px solid ${COLORS.hairline}`, paddingLeft: compact ? 10 : 20, minWidth: 0, overflow: "hidden" }}>
-            {visibleCrumbs.map((crumb, i) => {
-              const isLast = i === visibleCrumbs.length - 1;
-              return (
-                <React.Fragment key={i}>
-                  {i > 0 && <span style={{ fontSize: 11.5, color: COLORS.muted, flexShrink: 0 }}>/</span>}
-                  <span
-                    onClick={crumb.onClick || undefined}
-                    style={{
-                      fontSize: isLast ? 13 : 11.5,
-                      fontWeight: isLast ? 700 : 500,
-                      color: isLast ? COLORS.ink : COLORS.muted,
-                      cursor: crumb.onClick ? "pointer" : "default",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {crumb.label}
-                  </span>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 14, flexShrink: 0 }}>
         <button
@@ -947,9 +909,9 @@ function TopBar({ onLogoClick, breadcrumb, onMenuClick, theme, onToggleTheme, vi
 
 const STUDIO_NAV_TABS = [
   { key: "home", label: "Home", icon: "ti-home" },
-  { key: "calendar", label: "Master Calendar", icon: "ti-calendar" },
-  { key: "project", label: "Project View", icon: "ti-list" },
-  { key: "task", label: "Task View", icon: "ti-checklist" },
+  { key: "calendar", label: "Calendar", icon: "ti-calendar" },
+  { key: "project", label: "Projects", icon: "ti-list" },
+  { key: "task", label: "Tasks", icon: "ti-checklist" },
   { key: "library", label: "Content Library", icon: "ti-bookmarks" },
   { key: "contacts", label: "Contacts", icon: "ti-address-book" },
   { key: "campaigns", label: "Campaign Library", icon: "ti-speakerphone" },
@@ -970,18 +932,22 @@ function NavDrawer({ open, onClose, projects, studioTab, screen, onGoStudioTab, 
   }, [open, onClose]);
 
   const activeProjectId = (screen.name === "projectDashboard" || screen.name === "board") ? screen.projectId : null;
+  // Collapsed by default to keep the drawer short; opens automatically when
+  // landing on a project page, so the active project is never hidden.
+  const [projectsOpen, setProjectsOpen] = useState(!!activeProjectId);
 
   const linkStyle = (active) => ({
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    padding: "9px 12px",
+    gap: 12,
+    padding: "12px 14px",
     borderRadius: RADIUS,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: active ? 700 : 500,
     color: active ? COLORS.ink : COLORS.muted,
     background: active ? COLORS.cream : "transparent",
     cursor: "pointer",
+    marginBottom: 4,
   });
 
   return (
@@ -1022,25 +988,42 @@ function NavDrawer({ open, onClose, projects, studioTab, screen, onGoStudioTab, 
         </div>
 
         {STUDIO_NAV_TABS.map((t) => (
-          <div key={t.key} onClick={() => onGoStudioTab(t.key)} style={{ ...linkStyle(screen.name === "studio" && studioTab === t.key), marginBottom: t.key === "home" ? 12 : 0 }}>
-            <i className={"ti " + t.icon} style={{ fontSize: 15 }} aria-hidden="true" />
-            {t.label}
+          <div key={t.key}>
+            <div
+              onClick={() => onGoStudioTab(t.key)}
+              style={{ ...linkStyle(screen.name === "studio" && studioTab === t.key), justifyContent: "space-between", marginBottom: t.key === "home" ? 16 : 4 }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <i className={"ti " + t.icon} style={{ fontSize: 17 }} aria-hidden="true" />
+                {t.label}
+              </span>
+              {t.key === "project" && (
+                <i
+                  className={"ti " + (projectsOpen ? "ti-chevron-down" : "ti-chevron-right")}
+                  onClick={(e) => { e.stopPropagation(); setProjectsOpen((v) => !v); }}
+                  style={{ fontSize: 14 }}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+            {t.key === "project" && projectsOpen && (
+              <div style={{ marginBottom: 4 }}>
+                {[...projects].sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
+                  const a = PROJECT_ACCENTS[p.accentIdx];
+                  return (
+                    <div key={p.id} onClick={() => onGoProject(p.id)} style={{ ...linkStyle(activeProjectId === p.id), paddingLeft: 26 }}>
+                      <ProjectIcon icon={p.icon} color={a.hex} size={15} />
+                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                    </div>
+                  );
+                })}
+                {projects.length === 0 && (
+                  <div style={{ fontSize: 11.5, color: COLORS.muted, fontStyle: "italic", padding: "0 12px" }}>No projects yet.</div>
+                )}
+              </div>
+            )}
           </div>
         ))}
-
-        <div style={{ fontSize: 9.5, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.04em", padding: "18px 12px 6px" }}>Projects</div>
-        {[...projects].sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
-          const a = PROJECT_ACCENTS[p.accentIdx];
-          return (
-            <div key={p.id} onClick={() => onGoProject(p.id)} style={linkStyle(activeProjectId === p.id)}>
-              <ProjectIcon icon={p.icon} color={a.hex} size={15} />
-              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-            </div>
-          );
-        })}
-        {projects.length === 0 && (
-          <div style={{ fontSize: 11.5, color: COLORS.muted, fontStyle: "italic", padding: "0 12px" }}>No projects yet.</div>
-        )}
 
         <div style={{ borderTop: `1px solid ${COLORS.hairline}`, marginTop: 22, paddingTop: 14 }}>
           {storageAvailable ? (
@@ -1094,34 +1077,45 @@ function Badge({ label, hex }) {
   );
 }
 
-// A read-only preview of the current week's content-category tasks. Day
-// header and task-chip styling deliberately mirror the Master Calendar's own
-// Week view (see WeekGrid/MonthGrid) so this reads as the same calendar, just
-// condensed — not interactive beyond the "This week" link that opens the
-// real thing.
+// Condensed, read-only version of the Master Calendar's own Week hour-grid
+// (see WeekGrid): same day-separator lines and hour gridlines, just ticked
+// every 3 hours instead of every hour to stay compact, and with no drag/edit
+// interactivity — the "This week" link is the escape hatch to the real thing.
 function ContentCalendarSnippet({ tasks, today, projects, projectAccent }) {
   const weekStart = startOfWeek(today);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const projectName = (id) => (projects.find((p) => p.id === id) || {}).name || "";
+
+  const HOUR_START = 6;
+  const HOUR_END = 21;
+  const BLOCK_PX = 64; // px per 3-hour block
+  const PX_PER_MIN = BLOCK_PX / 180;
+  const totalHeight = (HOUR_END - HOUR_START) * 60 * PX_PER_MIN;
+  const ticks = [];
+  for (let h = HOUR_START; h <= HOUR_END; h += 3) ticks.push(h);
+
+  const clampedTop = (mins) => {
+    const clamped = Math.max(HOUR_START * 60, Math.min(mins, HOUR_END * 60));
+    return (clamped - HOUR_START * 60) * PX_PER_MIN;
+  };
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
-      {days.map((d) => {
-        const isToday = isSameDay(d, today);
-        const dayTasks = tasks
-          .filter((t) => t.category === "content" && isSameDay(t.date, d))
-          .sort((a, b) => (a.startMinutes ?? 0) - (b.startMinutes ?? 0));
-        return (
-          <div key={d.toISOString()} style={{ minWidth: 0 }}>
-            <div style={{ textAlign: "center", paddingBottom: 6, borderBottom: `1px solid ${COLORS.hairline}`, marginBottom: 5, fontSize: 9.5, fontWeight: 600, letterSpacing: "0.02em" }}>
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "38px repeat(7, 1fr)", gap: 0 }}>
+        <div />
+        {days.map((d) => {
+          const isToday = isSameDay(d, today);
+          return (
+            <div key={d.toISOString()} style={{ textAlign: "center", paddingBottom: 8, borderBottom: `1px solid ${COLORS.hairline}`, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.02em" }}>
               {DAY_NAMES[d.getDay()][0].toUpperCase()}{" "}
               <span
                 style={{
                   display: "inline-block",
-                  width: 17,
-                  height: 17,
-                  lineHeight: "17px",
+                  width: 20,
+                  height: 20,
+                  lineHeight: "20px",
                   borderRadius: "50%",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: isToday ? 700 : 500,
                   background: isToday ? COLORS.tomato : "transparent",
                   color: isToday ? COLORS.paper : COLORS.ink,
@@ -1130,33 +1124,62 @@ function ContentCalendarSnippet({ tasks, today, projects, projectAccent }) {
                 {d.getDate()}
               </span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 8 }}>
-              {dayTasks.slice(0, 3).map((t) => (
-                <div
-                  key={t.id}
-                  title={`${t.title} — ${projectName(t.projectId)}`}
-                  style={{
-                    background: COLORS.paper,
-                    border: `1px solid ${COLORS.hairline}`,
-                    borderLeft: `3px solid ${projectAccent(t.projectId)}`,
-                    borderRadius: RADIUS,
-                    fontSize: 9,
-                    padding: "3px 4px",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {t.title}
-                </div>
-              ))}
-              {dayTasks.length > 3 && (
-                <div style={{ fontSize: 8.5, color: COLORS.muted, textAlign: "center" }}>+{dayTasks.length - 3} more</div>
-              )}
+          );
+        })}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "38px repeat(7, 1fr)", gap: 0, position: "relative", marginTop: 6 }}>
+        <div style={{ position: "relative", height: totalHeight }}>
+          {ticks.map((h) => (
+            <div key={h} style={{ position: "absolute", top: (h - HOUR_START) * 60 * PX_PER_MIN - 6, right: 6, fontSize: 8.5, color: COLORS.muted, whiteSpace: "nowrap" }}>
+              {fmtHour(h)}
             </div>
-          </div>
-        );
-      })}
+          ))}
+        </div>
+
+        {days.map((d) => {
+          const dayTasks = tasks
+            .filter((t) => t.category === "content" && isSameDay(t.date, d))
+            .sort((a, b) => (a.startMinutes ?? 0) - (b.startMinutes ?? 0));
+          return (
+            <div key={d.toISOString()} data-daycol style={{ position: "relative", height: totalHeight, borderLeft: `1px solid ${COLORS.hairline}` }}>
+              {ticks.map((h) => (
+                <div key={h} style={{ position: "absolute", top: (h - HOUR_START) * 60 * PX_PER_MIN, left: 0, right: 0, borderTop: `1px solid ${COLORS.hairline}` }} />
+              ))}
+              {dayTasks.map((t) => {
+                const top = clampedTop(t.startMinutes ?? HOUR_START * 60);
+                const durationMins = t.durationMinutes ?? 60;
+                const height = Math.max(clampedTop((t.startMinutes ?? HOUR_START * 60) + durationMins) - top, 15);
+                return (
+                  <div
+                    key={t.id}
+                    title={`${t.title} — ${projectName(t.projectId)}`}
+                    style={{
+                      position: "absolute",
+                      top,
+                      left: 2,
+                      right: 2,
+                      height,
+                      background: COLORS.paper,
+                      border: `1px solid ${COLORS.hairline}`,
+                      borderLeft: `3px solid ${projectAccent(t.projectId)}`,
+                      borderRadius: RADIUS,
+                      fontSize: 9.5,
+                      padding: "2px 5px",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      zIndex: 1,
+                    }}
+                  >
+                    {t.title}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1321,36 +1344,36 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
   };
 
   return (
-    <div style={{ padding: viewport.isPhone ? "24px 16px 48px" : viewport.isTablet ? "32px 22px 56px" : "40px 32px 64px", maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ padding: viewport.isPhone ? "24px 16px 48px" : viewport.isTablet ? "32px 24px 56px" : "48px 48px 72px", maxWidth: 1440, margin: "0 auto" }}>
       {/* Greeting */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.royalBlue, marginBottom: 8 }}>
+      <div style={{ marginBottom: 36 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.royalBlue, marginBottom: 9 }}>
           {dateLine}
         </div>
-        <div style={{ fontSize: viewport.isPhone ? 20 : 26, fontWeight: 700, letterSpacing: "0.01em", color: COLORS.ink }}>
+        <div style={{ fontSize: viewport.isPhone ? 22 : 30, fontWeight: 700, letterSpacing: "0.01em", color: COLORS.ink }}>
           {greeting}, Jenny.
         </div>
-        <div style={{ fontSize: 13.5, color: COLORS.muted, marginTop: 4 }}>
+        <div style={{ fontSize: 14.5, color: COLORS.muted, marginTop: 5 }}>
           Here's what's happening with your projects.
         </div>
       </div>
 
       {/* My Projects — recently edited, not the full list; "View all" goes to Project View */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+      <div style={{ marginBottom: 36 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
           <SectionLabel color={COLORS.royalBlue}>My Projects</SectionLabel>
           <span
             onClick={() => setTab("project")}
-            style={{ fontSize: 11.5, fontWeight: 600, color: COLORS.royalBlue, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+            style={{ fontSize: 12, fontWeight: 600, color: COLORS.royalBlue, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
           >
             View all projects
-            <i className="ti ti-arrow-right" style={{ fontSize: 12 }} aria-hidden="true" />
+            <i className="ti ti-arrow-right" style={{ fontSize: 12.5 }} aria-hidden="true" />
           </span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr 1fr" : "repeat(4, 1fr)", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr 1fr" : "repeat(4, 1fr)", gap: 16 }}>
           {recentProjects.length === 0 && (
             <div style={{ gridColumn: "1 / -1", background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 20, fontSize: 12.5, color: COLORS.muted, fontStyle: "italic" }}>
-              No projects yet — add one from Project View.
+              No projects yet — add one from Projects.
             </div>
           )}
           {recentProjects.map((p) => {
@@ -1367,18 +1390,18 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
                 onClick={() => onOpenProject(p.id)}
                 style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden", cursor: "pointer" }}
               >
-                <div style={{ height: 110, background: COLORS.cream, borderBottom: `3px solid ${a.hex}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ height: 172, background: COLORS.cream, borderBottom: `3px solid ${a.hex}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {photo ? (
-                    <img src={photo.dataUrl} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    <img src={photo.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   ) : (
-                    <ProjectIcon icon={p.icon} color={a.hex} size={34} />
+                    <ProjectIcon icon={p.icon} color={a.hex} size={48} />
                   )}
                 </div>
-                <div style={{ padding: "10px 12px" }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                <div style={{ padding: "14px 16px" }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 9, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                     <Badge label={status} hex={status === "Not Started" ? COLORS.muted : a.hex} />
-                    <span style={{ fontSize: 11, color: COLORS.muted }}>{pct}%</span>
+                    <span style={{ fontSize: 11.5, color: COLORS.muted }}>{pct}%</span>
                   </div>
                 </div>
               </div>
@@ -1387,7 +1410,7 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1fr 1fr", gap: viewport.isPhone ? 32 : 28, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1fr 1.4fr", gap: viewport.isPhone ? 32 : 28, alignItems: "start" }}>
         {/* Left: today + week ahead */}
         <div>
           <SectionLabel color={COLORS.royalBlue}>Today</SectionLabel>
@@ -1434,20 +1457,7 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
           </div>
         </div>
 
-        {/* Middle: this week's content tasks, at a glance */}
-        <div>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-            <SectionLabel color={COLORS.royalBlue}>Content Calendar</SectionLabel>
-            <span onClick={goToCalendarThisWeek} style={{ fontSize: 11, fontWeight: 600, color: COLORS.royalBlue, cursor: "pointer" }}>
-              This week →
-            </span>
-          </div>
-          <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 16 }}>
-            <ContentCalendarSnippet tasks={tasks} today={today} projects={projects} projectAccent={projectAccent} />
-          </div>
-        </div>
-
-        {/* Right: supplies needed across every not-yet-completed project —
+        {/* Middle: supplies needed across every not-yet-completed project —
             pulls from each project's own Supplies list on the Making Of
             board, so there's nothing new to maintain here. */}
         <div>
@@ -1491,17 +1501,38 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
             })}
           </div>
         </div>
+
+        {/* Right: this week's content tasks, at a glance — wider and taller
+            than the other two columns, with the current month/year labeled
+            at the top since this is a standalone snapshot, not the full
+            Master Calendar. */}
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+            <SectionLabel color={COLORS.royalBlue}>Content Calendar</SectionLabel>
+            <span onClick={goToCalendarThisWeek} style={{ fontSize: 11, fontWeight: 600, color: COLORS.royalBlue, cursor: "pointer" }}>
+              This week →
+            </span>
+          </div>
+          <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 24, minHeight: 320 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>
+              {MONTH_NAMES[today.getMonth()]} {today.getFullYear()}
+            </div>
+            <ContentCalendarSnippet tasks={tasks} today={today} projects={projects} projectAccent={projectAccent} />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, tab, setTab, calMode, setCalMode, calCursor, setCalCursor, contentLibrary, setContentLibrary, boardContent, setBoardContent, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
-  // Tab switching lives entirely in the hamburger NavDrawer now — this row
-  // used to duplicate the exact same links, which was redundant once the
-  // drawer covered every tab.
   return (
     <div style={{ padding: "32px 32px 64px" }}>
+      <div style={{ display: "flex", justifyContent: "space-evenly", alignItems: "center", marginBottom: 28, borderBottom: `1px solid ${COLORS.hairline}`, flexWrap: "wrap" }}>
+        {STUDIO_NAV_TABS.map((t) => (
+          <TabButton key={t.key} active={tab === t.key} onClick={() => setTab(t.key)}>{t.label}</TabButton>
+        ))}
+      </div>
 
       {tab === "home" && <HomeLanding projects={projects} tasks={tasks} setTasks={setTasks} onOpenProject={onOpenProject} boardContent={boardContent} setBoardContent={setBoardContent} setTab={setTab} setCalMode={setCalMode} setCalCursor={setCalCursor} />}
       {tab === "calendar" && (
@@ -1519,7 +1550,7 @@ function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, t
       {tab === "analytics" && <AnalyticsView projects={projects} boardContent={boardContent} onOpenProject={onOpenProject} />}
       {tab === "project" && <ProjectListView projects={projects} setProjects={setProjects} tasks={tasks} onOpenProject={onOpenProject} />}
       {tab === "task" && <TaskListView projects={projects} tasks={tasks} setTasks={setTasks} onOpenProject={onOpenProject} />}
-      {tab === "library" && <ContentLibraryView contentLibrary={contentLibrary} setContentLibrary={setContentLibrary} boardContent={boardContent} setBoardContent={setBoardContent} />}
+      {tab === "library" && <ContentLibraryView contentLibrary={contentLibrary} setContentLibrary={setContentLibrary} boardContent={boardContent} setBoardContent={setBoardContent} projects={projects} tasks={tasks} onOpenProject={onOpenProject} />}
       {tab === "campaigns" && <CampaignLibraryView campaignLibrary={campaignLibrary} setCampaignLibrary={setCampaignLibrary} />}
       {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
     </div>
@@ -1746,7 +1777,7 @@ function RevenueTrendChart({ listingRows }) {
    Shared vocabulary for Content Board's Type and Series fields — reused across
    every project, so the same names mean the same thing everywhere. Also
    editable inline from the Content Board itself via "+ Add new…" in each dropdown. */
-function ContentLibraryView({ contentLibrary, setContentLibrary, boardContent, setBoardContent }) {
+function ContentLibraryView({ contentLibrary, setContentLibrary, boardContent, setBoardContent, projects, tasks, onOpenProject }) {
   // Renaming a library entry must also update every content piece that currently
   // references the old value by name, or those pieces silently fall out of sync.
   const propagateRename = (field, oldVal, newVal) => {
@@ -1766,34 +1797,98 @@ function ContentLibraryView({ contentLibrary, setContentLibrary, boardContent, s
   };
 
   return (
-    <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 24 }}>
-      <div style={{ fontSize: 11.5, color: COLORS.muted, marginBottom: 20, lineHeight: 1.5 }}>
-        Shared across every project's Content board — rename or remove here, and it updates everywhere it's used.
+    <div>
+      <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 24, marginBottom: 20 }}>
+        <div style={{ fontSize: 11.5, color: COLORS.muted, marginBottom: 20, lineHeight: 1.5 }}>
+          Shared across every project's Content board — rename or remove here, and it updates everywhere it's used.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+          <LibraryListEditor
+            title="Content types"
+            items={contentLibrary.types}
+            onAdd={(val) => setContentLibrary((prev) => ({ ...prev, types: [...prev.types, val] }))}
+            onRemove={(val) => setContentLibrary((prev) => ({ ...prev, types: prev.types.filter((v) => v !== val) }))}
+            onEdit={(oldVal, newVal) => {
+              setContentLibrary((prev) => ({ ...prev, types: prev.types.map((v) => (v === oldVal ? newVal : v)) }));
+              propagateRename("type", oldVal, newVal);
+            }}
+            placeholder="Add a content type…"
+          />
+          <LibraryListEditor
+            title="Series"
+            items={contentLibrary.series}
+            onAdd={(val) => setContentLibrary((prev) => ({ ...prev, series: [...prev.series, val] }))}
+            onRemove={(val) => setContentLibrary((prev) => ({ ...prev, series: prev.series.filter((v) => v !== val) }))}
+            onEdit={(oldVal, newVal) => {
+              setContentLibrary((prev) => ({ ...prev, series: prev.series.map((v) => (v === oldVal ? newVal : v)) }));
+              propagateRename("series", oldVal, newVal);
+            }}
+            placeholder="Add a series…"
+          />
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
-        <LibraryListEditor
-          title="Content types"
-          items={contentLibrary.types}
-          onAdd={(val) => setContentLibrary((prev) => ({ ...prev, types: [...prev.types, val] }))}
-          onRemove={(val) => setContentLibrary((prev) => ({ ...prev, types: prev.types.filter((v) => v !== val) }))}
-          onEdit={(oldVal, newVal) => {
-            setContentLibrary((prev) => ({ ...prev, types: prev.types.map((v) => (v === oldVal ? newVal : v)) }));
-            propagateRename("type", oldVal, newVal);
-          }}
-          placeholder="Add a content type…"
-        />
-        <LibraryListEditor
-          title="Series"
-          items={contentLibrary.series}
-          onAdd={(val) => setContentLibrary((prev) => ({ ...prev, series: [...prev.series, val] }))}
-          onRemove={(val) => setContentLibrary((prev) => ({ ...prev, series: prev.series.filter((v) => v !== val) }))}
-          onEdit={(oldVal, newVal) => {
-            setContentLibrary((prev) => ({ ...prev, series: prev.series.map((v) => (v === oldVal ? newVal : v)) }));
-            propagateRename("series", oldVal, newVal);
-          }}
-          placeholder="Add a series…"
-        />
+
+      <AllContentPiecesOverview projects={projects} tasks={tasks} boardContent={boardContent} onOpenProject={onOpenProject} />
+    </div>
+  );
+}
+
+// A global rollup of every project's Content board, one row per piece — the
+// answer to "what am I planning across everything, right now." "Active"
+// mirrors Home's Supplies Needed definition: every project that isn't fully
+// completed, so a wrapped-up project's old pieces don't clutter the list.
+function AllContentPiecesOverview({ projects, tasks, boardContent, onOpenProject }) {
+  const rows = [];
+  projects.forEach((p) => {
+    const pTasks = tasks.filter((t) => t.projectId === p.id);
+    const isCompleted = pTasks.length > 0 && pTasks.every((t) => t.completed);
+    if (isCompleted) return;
+    const pieces = (boardContent[p.id + ":content"] || {}).pieces || [];
+    pieces.forEach((piece) => {
+      const pieceTasks = pTasks.filter((t) => t.category === "content" && t.contentPieceId === piece.id);
+      rows.push({ piece, project: p, pieceTasks });
+    });
+  });
+
+  return (
+    <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 24, marginBottom: 20 }}>
+      <SectionLabel color={COLORS.royalBlue}>All Content Pieces</SectionLabel>
+      <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 6, marginBottom: 16, lineHeight: 1.5 }}>
+        Every content piece from every active project, in one place.
       </div>
+      {rows.length === 0 && (
+        <div style={{ fontSize: 12.5, color: COLORS.muted, fontStyle: "italic" }}>
+          No content pieces yet — add one from a project's Content board.
+        </div>
+      )}
+      {rows.map(({ piece, project: p, pieceTasks }) => {
+        const a = PROJECT_ACCENTS[p.accentIdx];
+        const displayTitle = (piece.title || "").trim() || "Untitled content piece";
+        return (
+          <div
+            key={piece.id}
+            onClick={() => onOpenProject(p.id)}
+            style={{
+              display: "flex", alignItems: "center", gap: 12, padding: "11px 4px",
+              borderBottom: `1px solid ${COLORS.hairline}`, cursor: "pointer",
+            }}
+          >
+            <ProjectIcon icon={p.icon} color={a.hex} size={16} />
+            <span style={{ fontSize: 13, fontWeight: 700, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {displayTitle}
+            </span>
+            {piece.type && <span style={{ fontSize: 10.5, color: COLORS.muted, flexShrink: 0 }}>{piece.type}</span>}
+            <span onClick={(e) => { e.stopPropagation(); onOpenProject(p.id); }} style={{ flexShrink: 0 }}>
+              <Badge label={p.name} hex={a.hex} />
+            </span>
+            {pieceTasks.length > 0 && (
+              <span style={{ fontSize: 11, color: COLORS.muted, flexShrink: 0, whiteSpace: "nowrap" }}>
+                {pieceTasks.filter((t) => t.completed).length} of {pieceTasks.length} tasks
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1908,16 +2003,7 @@ function CampaignLibraryView({ campaignLibrary, setCampaignLibrary }) {
         Reusable outreach templates — shared across every project's Marketing board. Fill in the [bracketed] parts before sending.
       </div>
 
-      {campaignLibrary.map((t) => (
-        <CampaignTemplateCard
-          key={t.id}
-          template={t}
-          onUpdate={(field, value) => updateTemplate(t.id, field, value)}
-          onRemove={() => removeTemplate(t.id)}
-        />
-      ))}
-
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
@@ -1941,6 +2027,15 @@ function CampaignLibraryView({ campaignLibrary, setCampaignLibrary }) {
           Add
         </button>
       </div>
+
+      {campaignLibrary.map((t) => (
+        <CampaignTemplateCard
+          key={t.id}
+          template={t}
+          onUpdate={(field, value) => updateTemplate(t.id, field, value)}
+          onRemove={() => removeTemplate(t.id)}
+        />
+      ))}
     </div>
   );
 }
@@ -2121,8 +2216,11 @@ function ContactsView({ contacts, setContacts }) {
 
   return (
     <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 24 }}>
-      <div style={{ fontSize: 11.5, color: COLORS.muted, lineHeight: 1.5, marginBottom: 16 }}>
-        Shared across every project — reference these from Sales Leads instead of retyping contact info each time.
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
+        <div style={{ fontSize: 11.5, color: COLORS.muted, lineHeight: 1.5 }}>
+          Shared across every project — reference these from Sales Leads instead of retyping contact info each time.
+        </div>
+        <button onClick={submitAdd} style={{ ...navBtnStyle, background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.ink}`, flexShrink: 0 }}>+ Add contact</button>
       </div>
 
       <div style={{ border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 14, marginBottom: 16 }}>
@@ -2135,10 +2233,7 @@ function ContactsView({ contacts, setContacts }) {
             {CONTACT_RELATIONSHIPS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
-        <textarea value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Notes…" style={{ ...fieldStyle, minHeight: 44, resize: "vertical", marginBottom: 8 }} />
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={submitAdd} style={{ ...navBtnStyle, background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.ink}` }}>+ Add contact</button>
-        </div>
+        <textarea value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Notes…" style={{ ...fieldStyle, minHeight: 44, resize: "vertical" }} />
       </div>
 
       {contacts.length === 0 && (
@@ -2232,11 +2327,36 @@ function ContactRow({ contact, isEditing, onEdit, onDone, onUpdate, onRemove, ju
   );
 }
 
+function TabButton({ active, children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        border: "none",
+        background: "none",
+        fontFamily: "inherit",
+        fontSize: 13,
+        fontWeight: active ? 700 : 500,
+        color: active ? COLORS.ink : COLORS.muted,
+        padding: "12px 16px",
+        cursor: "pointer",
+        letterSpacing: "0.05em",
+        textTransform: "uppercase",
+        borderBottom: active ? `2px solid ${COLORS.ink}` : "2px solid transparent",
+        marginBottom: -1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 /* ---------- Calendar View ---------- */
 function CalendarView({ projects, tasks, setTasks, onOpenProject, mode, setMode, cursor, setCursor }) {
   const viewport = useViewport();
   const [projectFilter, setProjectFilter] = useState("All");
   const today = appToday();
+  const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name));
 
   const filteredTasks = useMemo(
     () => (projectFilter === "All" ? tasks : tasks.filter((t) => t.projectId === projectFilter)),
@@ -2277,7 +2397,7 @@ function CalendarView({ projects, tasks, setTasks, onOpenProject, mode, setMode,
             label="Project"
             value={projectFilter}
             onChange={setProjectFilter}
-            options={["All", ...projects.map((p) => p.id)]}
+            options={["All", ...sortedProjects.map((p) => p.id)]}
             renderOption={(v) => (v === "All" ? "All" : projects.find((p) => p.id === v)?.name)}
           />
         )}
@@ -3104,7 +3224,7 @@ function WeekGrid({ cursor, today, tasks, setTasks, projects, projectAccent, onO
                 WebkitAppearance: "none",
               }}
             >
-              {projects.map((p) => (
+              {sortedProjects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
@@ -3356,6 +3476,24 @@ function ProjectListView({ projects, setProjects, tasks, onOpenProject }) {
     <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 24 }}>
       <FilterDropdown label="Status" value={statusFilter} onChange={setStatusFilter} options={["All", "Completed", "In Progress", "Not Started"]} />
 
+      <input
+        value={newProjectText}
+        onChange={(e) => setNewProjectText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") submitNewProject(); }}
+        placeholder="Start typing to add new project…"
+        style={{
+          width: "100%",
+          background: COLORS.cream,
+          border: `1px solid ${COLORS.hairline}`,
+          borderRadius: RADIUS,
+          padding: "12px 16px",
+          fontSize: 14,
+          fontFamily: "inherit",
+          color: COLORS.ink,
+          marginTop: 14,
+        }}
+      />
+
       <div style={{ marginTop: 20 }}>
         {/* Table header on tablet/desktop — click to sort, click again to
             reverse. Five fixed-width columns can't fit a phone screen
@@ -3587,24 +3725,6 @@ function ProjectListView({ projects, setProjects, tasks, onOpenProject }) {
             </div>
           );
         })}
-
-        <input
-          value={newProjectText}
-          onChange={(e) => setNewProjectText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") submitNewProject(); }}
-          placeholder="Start typing to add new project…"
-          style={{
-            width: "100%",
-            background: COLORS.cream,
-            border: `1px solid ${COLORS.hairline}`,
-            borderRadius: RADIUS,
-            padding: "12px 16px",
-            fontSize: 14,
-            fontFamily: "inherit",
-            color: COLORS.ink,
-            marginTop: 10,
-          }}
-        />
       </div>
     </div>
   );
@@ -3660,6 +3780,9 @@ function TaskListView({ projects, tasks, setTasks, onOpenProject }) {
 
   return (
     <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 24 }}>
+      <div style={{ fontSize: 11.5, color: COLORS.muted, marginBottom: 12, lineHeight: 1.5 }}>
+        Click into tasks to edit. Click into projects to add new tasks and to see more detail.
+      </div>
       <FilterDropdown label="Status" value={statusFilter} onChange={setStatusFilter} options={["All", "Completed", "In Progress", "Not Started"]} />
 
       <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
@@ -3841,7 +3964,7 @@ const BOARD_STAGES = [
 // keeping its own separate counter.
 const DEFAULT_PRODUCT = {
   name: "",
-  photos: [], // { id, dataUrl }
+  photos: [], // { id, url, path } — path is the Storage object path, needed to delete on removal
   primaryPhotoId: null,
   dimensions: "",
   itemWeight: "",
@@ -4168,13 +4291,12 @@ function isHeicFile(file) {
   return name.endsWith(".heic") || name.endsWith(".heif");
 }
 
-// Downscales an uploaded image before it's stored, since photos are kept as
-// base64 in localStorage (no backend yet) and full-size camera files would
-// burn through that budget after just a few pieces. HEIC files are converted
-// to JPEG first (via heic-to, which bundles a current libheif build — the
-// more commonly used heic2any is stale/unmaintained and rejects HEIC files
-// from newer iPhones with "format not supported") since the canvas step
-// below can't read HEIC directly.
+// Downscales an uploaded image before it's stored, so full-size camera files
+// don't get uploaded as-is. HEIC files are converted to JPEG first (via
+// heic-to, which bundles a current libheif build — the more commonly used
+// heic2any is stale/unmaintained and rejects HEIC files from newer iPhones
+// with "format not supported") since the canvas step below can't read HEIC
+// directly. Resolves to a JPEG Blob, ready to upload to Storage.
 async function resizeImageFile(file, maxDim) {
   let sourceBlob = file;
   if (isHeicFile(file)) {
@@ -4193,12 +4315,41 @@ async function resizeImageFile(file, maxDim) {
         canvas.height = Math.round(img.height * scale);
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not encode image"))), "image/jpeg", 0.85);
       };
       img.src = reader.result;
     };
     reader.readAsDataURL(sourceBlob);
   });
+}
+
+/* Photos live in Supabase Storage (bucket "photos"), not inline in the
+   boardContent blob — that blob is subject to whole-value last-write-wins
+   overwrites between sessions/tabs, which was silently erasing photos.
+   Each photo is its own upload, so it can't be clobbered by an unrelated,
+   stale save elsewhere. Path is scoped under the user's own id (required by
+   the bucket's RLS policies) plus the project, so photos are addressable and
+   easy to reason about in the bucket browser. */
+async function uploadPhotoToStorage(blob, path) {
+  const res = await authedFetch("/storage/v1/object/photos/" + path, {
+    method: "POST",
+    headers: { "Content-Type": blob.type || "image/jpeg", "x-upsert": "true" },
+    body: blob,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return SUPABASE_URL + "/storage/v1/object/public/photos/" + path;
+}
+
+async function deletePhotoFromStorage(path) {
+  try {
+    await authedFetch("/storage/v1/object/photos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefixes: [path] }),
+    });
+  } catch (e) {
+    console.warn("StudioCo: could not delete photo from storage", path, e);
+  }
 }
 
 function ProductPage({ project, content, setContent, onBack }) {
@@ -4215,16 +4366,26 @@ function ProductPage({ project, content, setContent, onBack }) {
   const handleFiles = async (fileList) => {
     const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") || isHeicFile(f));
     if (files.length === 0) return;
+    if (!storeUserId) {
+      setUploadError("Photo upload needs an active session — try refreshing the page.");
+      return;
+    }
     setUploading(true);
     setUploadError("");
     // Each file processed independently so one bad photo doesn't lose the
     // rest of the batch — whatever succeeds gets saved, failures are reported.
-    const results = await Promise.allSettled(files.map((file) => resizeImageFile(file, 1000)));
+    const results = await Promise.allSettled(files.map(async (file, i) => {
+      const blob = await resizeImageFile(file, 1000);
+      const id = "photo-" + Date.now() + "-" + i + "-" + Math.random().toString(36).slice(2, 7);
+      const path = storeUserId + "/" + project.id + "/" + id + ".jpg";
+      const url = await uploadPhotoToStorage(blob, path);
+      return { id, url, path };
+    }));
     const newPhotos = [];
     const failed = [];
     results.forEach((r, i) => {
       if (r.status === "fulfilled") {
-        newPhotos.push({ id: "photo-" + Date.now() + "-" + i + "-" + Math.random().toString(36).slice(2, 7), dataUrl: r.value });
+        newPhotos.push(r.value);
       } else {
         console.warn("StudioCo: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
         failed.push(files[i].name);
@@ -4244,11 +4405,13 @@ function ProductPage({ project, content, setContent, onBack }) {
   };
 
   const removePhoto = (id) => {
+    const removed = content.photos.find((p) => p.id === id);
     setContent((prev) => {
       const photos = prev.photos.filter((p) => p.id !== id);
       const primaryPhotoId = prev.primaryPhotoId === id ? (photos[0] ? photos[0].id : null) : prev.primaryPhotoId;
       return { ...prev, photos, primaryPhotoId };
     });
+    if (removed && removed.path) deletePhotoFromStorage(removed.path);
   };
 
   const toggleCareTag = (tag) => {
@@ -4305,14 +4468,14 @@ function ProductPage({ project, content, setContent, onBack }) {
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
           {primaryPhoto && (
             <div style={{ width: 160, height: 160, borderRadius: RADIUS, overflow: "hidden", border: `1px solid ${COLORS.hairline}`, flexShrink: 0 }}>
-              <img src={primaryPhoto.dataUrl} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <img src={primaryPhoto.url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
             </div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignContent: "flex-start", flex: 1, minWidth: 200 }}>
             {content.photos.map((p) => (
               <div key={p.id} style={{ position: "relative", width: 64, height: 64 }}>
                 <img
-                  src={p.dataUrl}
+                  src={p.url}
                   onClick={() => update("primaryPhotoId", p.id)}
                   title={p.id === content.primaryPhotoId ? "Primary photo" : "Click to set as primary"}
                   style={{
@@ -4610,6 +4773,7 @@ function BoardScreen({ projectId, boardKey, projects, onBack, onSwitchProject, o
   const project = projects.find((p) => p.id === projectId);
   const board = BOARD_STAGES.find((b) => b.key === boardKey);
   if (!project || !board) return null;
+  const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name));
   const a = PROJECT_ACCENTS[project.accentIdx];
   const contentKey = projectId + ":" + boardKey;
 
@@ -4645,7 +4809,7 @@ function BoardScreen({ projectId, boardKey, projects, onBack, onSwitchProject, o
               WebkitAppearance: "none",
             }}
           >
-            {projects.map((p) => (
+            {sortedProjects.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -5762,7 +5926,7 @@ function LeadAccordionItem({ lead, isExpanded, onToggle, onUpdate, onRemove, con
                   style={{ ...fieldStyle, cursor: "pointer" }}
                 >
                   <option value="">No contact</option>
-                  {contacts.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {[...contacts].sort((a, b) => a.name.localeCompare(b.name)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   <option value="__add">+ Add new contact…</option>
                 </select>
               )}
@@ -6748,7 +6912,7 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
 
       {!newTitle && (
         <div style={{ fontSize: 10, color: COLORS.muted, fontStyle: "italic", marginTop: 6 }}>
-          Tip: type "copy tasks [1,2,3] from project [name]" to pull tasks from another project's Making Of list. Click any task, date, or time to edit it. These tasks also appear on the Master Calendar, tagged {category === "craft" ? "Craft" : "Content"}.
+          Tip: type "copy tasks [1,2,3] from project [name]" to pull tasks from another project's Making Of list. Click any task, date, or time to edit it. These tasks also appear on the Calendar, tagged {category === "craft" ? "Craft" : "Content"}.
         </div>
       )}
       {copyHint && copyHint.error && (
