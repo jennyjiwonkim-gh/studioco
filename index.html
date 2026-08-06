@@ -822,6 +822,9 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   // Home is just the first Studio tab now, so "going home" is the same
   // action as switching to any other tab — no separate screen state needed.
   const goHome = () => goStudioTab("home");
+  // The project-detail header's back arrow always returns to the Projects
+  // list, regardless of which tab (Overview or a board) it's clicked from.
+  const goProjectList = () => goStudioTab("project");
 
   const activeProject = (screen.name === "projectDashboard" || screen.name === "board" || screen.name === "product") ? projects.find((p) => p.id === screen.projectId) : null;
 
@@ -894,10 +897,12 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
       {screen.name === "projectDashboard" && (
         <ProjectDashboard
           project={projects.find((p) => p.id === screen.projectId)}
+          projects={projects}
           setProjects={setProjects}
           tasks={tasks}
-          onBack={goStudio}
+          onBack={goProjectList}
           onOpenBoard={goBoard}
+          onSwitchProject={goProject}
           onOpenProduct={goProduct}
         />
       )}
@@ -919,7 +924,9 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
           projectId={screen.projectId}
           boardKey={screen.boardKey}
           projects={projects}
-          onBack={() => goProject(screen.projectId)}
+          setProjects={setProjects}
+          onBack={goProjectList}
+          onGoOverview={() => goProject(screen.projectId)}
           onSwitchProject={(pid) => goBoard(pid, screen.boardKey)}
           onSwitchBoard={(boardKey) => goBoard(screen.projectId, boardKey)}
           onOpenProduct={goProduct}
@@ -4077,13 +4084,19 @@ function TaskListView({ projects, tasks, setTasks, onOpenProject }) {
 
 /* ---------- Project Dashboard (Stage 2) ---------- */
 const BOARD_STAGES = [
-  { key: "planning", label: "Inspiration and Planning" },
+  { key: "planning", label: "Plan" },
   { key: "making", label: "Craft" },
   { key: "content", label: "Content" },
   { key: "marketing", label: "Marketing" },
   { key: "sales", label: "Sales" },
-  { key: "learnings", label: "Learnings" },
+  { key: "learnings", label: "Notes" },
 ];
+
+// The project-detail tab strip: Overview (the dashboard/summary) plus every
+// pipeline board, in order. Overview isn't a board key/boardContent slot —
+// it's the ProjectDashboard screen — so it's prepended here rather than
+// folded into BOARD_STAGES itself.
+const PROJECT_TABS = [{ key: "overview", label: "Overview" }, ...BOARD_STAGES];
 
 // ---- Product page (per-project final listing spec sheet) ----
 // Field names deliberately mirror StoreCo's PIECES model (title/price/
@@ -4185,22 +4198,43 @@ const PROJECT_META = {
   "newport-inspo": { description: "", targetPostDate: null, priority: "Low", budget: 0 },
 };
 
-function ProjectDashboard({ project, setProjects, tasks, onBack, onOpenBoard, onOpenProduct }) {
-  const viewport = useViewport();
-  const [editingPriority, setEditingPriority] = useState(false);
+// Compact "switch project" control — a native <select> sized down to just
+// its arrow glyph, sitting right after the project name. Native <select> so
+// it stays a real, accessible control (keyboard, screen readers) even though
+// visually it's just a triangle, same trick FilterDropdown uses elsewhere
+// with a visible box — this is the same idea shrunk to an icon-only hit target.
+function ProjectSwitchToggle({ projects, value, onChange }) {
+  const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <div style={{ position: "relative", width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Switch project"
+        style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", appearance: "none", WebkitAppearance: "none", border: "none", background: "none" }}
+      >
+        {sorted.map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
+      <svg width="10" height="7" viewBox="0 0 9 6" fill="none" style={{ pointerEvents: "none" }} aria-hidden="true">
+        <path d="M1 1L4.5 4.5L8 1" stroke={COLORS.muted} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}
+
+// Shared header for every project-detail screen (Overview + each board) —
+// back arrow, editable project name, project-switch toggle, and the
+// Overview/Plan/Craft/Content/Marketing/Sales/Notes tab strip. Used by both
+// ProjectDashboard and BoardScreen so the header/tabs stay visually
+// identical and don't reset while flipping between tabs, even though each
+// tab is still its own screen under the hood (`AppInner`'s `screen` state).
+function ProjectScreenHeader({ project, projects, setProjects, activeTab, onBack, onSwitchTab, onSwitchProject, statusLabel, subtitle }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
-  if (!project) return null;
   const a = PROJECT_ACCENTS[project.accentIdx];
-  const meta = PROJECT_META[project.id] || {};
-  // Live edits on the project itself take precedence over the seed metadata —
-  // same precedence Project View already uses, so editing priority from either
-  // screen shows up consistently on both.
-  const priority = project.priority || meta.priority || "—";
-  const updatePriority = (value) => {
-    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, priority: value } : p)));
-    setEditingPriority(false);
-  };
+
   const startEditingName = () => {
     setNameDraft(project.name);
     setEditingName(true);
@@ -4214,6 +4248,76 @@ function ProjectDashboard({ project, setProjects, tasks, onBack, onOpenBoard, on
       setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, name: trimmed } : p)));
     }
     setEditingName(false);
+  };
+
+  return (
+    <div style={{ borderLeft: `4px solid ${a.hex}`, paddingLeft: 18, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <button
+            onClick={onBack}
+            aria-label="Back to Projects"
+            title="Back to Projects"
+            style={{ border: "none", background: "none", cursor: "pointer", padding: 4, margin: "0 0 0 -4px", fontSize: 18, color: COLORS.muted, lineHeight: 1, display: "flex", flexShrink: 0 }}
+          >
+            ←
+          </button>
+          <ProjectIcon icon={project.icon} color={a.hex} size={22} />
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitName();
+                if (e.key === "Escape") setEditingName(false);
+              }}
+              style={{
+                fontSize: 20,
+                fontWeight: 700,
+                letterSpacing: "0.01em",
+                fontFamily: "inherit",
+                color: COLORS.ink,
+                background: COLORS.cream,
+                border: `1px solid ${COLORS.hairline}`,
+                borderRadius: RADIUS,
+                padding: "2px 8px",
+                minWidth: 160,
+              }}
+            />
+          ) : (
+            <h1 onClick={startEditingName} title="Click to rename" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "0.01em", margin: 0, cursor: "text" }}>
+              {project.name}
+            </h1>
+          )}
+          <ProjectSwitchToggle projects={projects} value={project.id} onChange={onSwitchProject} />
+        </div>
+        {statusLabel}
+      </div>
+      {subtitle}
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", borderBottom: `1px solid ${COLORS.hairline}`, marginTop: 16 }}>
+        {PROJECT_TABS.map((t) => (
+          <TabButton key={t.key} active={activeTab === t.key} onClick={() => onSwitchTab(t.key)}>{t.label}</TabButton>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProjectDashboard({ project, projects, setProjects, tasks, onBack, onOpenBoard, onSwitchProject, onOpenProduct }) {
+  const viewport = useViewport();
+  const [editingPriority, setEditingPriority] = useState(false);
+  if (!project) return null;
+  const a = PROJECT_ACCENTS[project.accentIdx];
+  const meta = PROJECT_META[project.id] || {};
+  // Live edits on the project itself take precedence over the seed metadata —
+  // same precedence Project View already uses, so editing priority from either
+  // screen shows up consistently on both.
+  const priority = project.priority || meta.priority || "—";
+  const updatePriority = (value) => {
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, priority: value } : p)));
+    setEditingPriority(false);
   };
   const pTasks = tasks.filter((t) => t.projectId === project.id);
   const completedCount = pTasks.filter((t) => t.completed).length;
@@ -4234,46 +4338,23 @@ function ProjectDashboard({ project, setProjects, tasks, onBack, onOpenBoard, on
 
   return (
     <div style={{ padding: viewport.isPhone ? "22px 16px 48px" : viewport.isTablet ? "28px 22px 56px" : "32px 32px 64px" }}>
-      {/* Header block */}
-      <div style={{ borderLeft: `4px solid ${a.hex}`, paddingLeft: 18, marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "0.01em", margin: 0, display: "flex", alignItems: "center", gap: 12 }}>
-            <ProjectIcon icon={project.icon} color={a.hex} size={24} />
-            {editingName ? (
-              <input
-                autoFocus
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onBlur={commitName}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitName();
-                  if (e.key === "Escape") setEditingName(false);
-                }}
-                style={{
-                  fontSize: 22,
-                  fontWeight: 700,
-                  letterSpacing: "0.01em",
-                  fontFamily: "inherit",
-                  color: COLORS.ink,
-                  background: COLORS.cream,
-                  border: `1px solid ${COLORS.hairline}`,
-                  borderRadius: RADIUS,
-                  padding: "2px 8px",
-                  minWidth: 160,
-                }}
-              />
-            ) : (
-              <span onClick={startEditingName} style={{ cursor: "text" }} title="Click to rename">
-                {project.name}
-              </span>
-            )}
-          </h1>
+      <ProjectScreenHeader
+        project={project}
+        projects={projects}
+        setProjects={setProjects}
+        activeTab="overview"
+        onBack={onBack}
+        onSwitchTab={(key) => key !== "overview" && onOpenBoard(project.id, key)}
+        onSwitchProject={onSwitchProject}
+        statusLabel={
           <span style={{ fontSize: 10.5, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{status}</span>
-        </div>
-        {meta.description && (
-          <p style={{ fontSize: 13.5, color: COLORS.muted, marginTop: 8, marginBottom: 0, maxWidth: 560, lineHeight: 1.5 }}>{meta.description}</p>
-        )}
-      </div>
+        }
+        subtitle={
+          meta.description ? (
+            <p style={{ fontSize: 13.5, color: COLORS.muted, marginTop: 8, marginBottom: 0, maxWidth: 560, lineHeight: 1.5 }}>{meta.description}</p>
+          ) : null
+        }
+      />
 
       {/* Product Details — the final-listing spec sheet, separate from the 8
           pipeline boards since it isn't a stage, it's a persistent record. */}
@@ -4903,53 +4984,24 @@ function UnitRow({ label, unit, accentHex, fieldStyle, onToggle, onDateChange })
 }
 
 /* ============ BOARD SCREEN (shared shell for all 8 pipeline boards) ============ */
-function BoardScreen({ projectId, boardKey, projects, onBack, onSwitchProject, onSwitchBoard, onOpenProduct, boardContent, setBoardContent, tasks, setTasks, contentLibrary, setContentLibrary, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
+function BoardScreen({ projectId, boardKey, projects, setProjects, onBack, onGoOverview, onSwitchProject, onSwitchBoard, onOpenProduct, boardContent, setBoardContent, tasks, setTasks, contentLibrary, setContentLibrary, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
   const project = projects.find((p) => p.id === projectId);
   const board = BOARD_STAGES.find((b) => b.key === boardKey);
   if (!project || !board) return null;
-  const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name));
   const a = PROJECT_ACCENTS[project.accentIdx];
   const contentKey = projectId + ":" + boardKey;
 
   return (
     <div style={{ padding: "28px 32px 64px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <FilterDropdown
-          label="Board"
-          value={boardKey}
-          onChange={onSwitchBoard}
-          options={BOARD_STAGES.map((b) => b.key)}
-          renderOption={(key) => {
-            const idx = BOARD_STAGES.findIndex((b) => b.key === key);
-            return String(idx + 1).padStart(2, "0") + " " + BOARD_STAGES[idx].label;
-          }}
-        />
-
-        <div style={{ position: "relative" }}>
-          <select
-            value={projectId}
-            onChange={(e) => onSwitchProject(e.target.value)}
-            style={{
-              background: COLORS.paper,
-              border: `1px solid ${COLORS.ink}`,
-              borderRadius: RADIUS,
-              padding: "7px 30px 7px 12px",
-              fontSize: 13,
-              fontFamily: "inherit",
-              fontWeight: 700,
-              color: COLORS.ink,
-              cursor: "pointer",
-              appearance: "none",
-              WebkitAppearance: "none",
-            }}
-          >
-            {sortedProjects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <DropdownArrow />
-        </div>
-      </div>
+      <ProjectScreenHeader
+        project={project}
+        projects={projects}
+        setProjects={setProjects}
+        activeTab={boardKey}
+        onBack={onBack}
+        onSwitchTab={(key) => (key === "overview" ? onGoOverview() : onSwitchBoard(key))}
+        onSwitchProject={onSwitchProject}
+      />
 
       <div style={{ borderTop: `3px solid ${a.hex}`, background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden" }}>
         {boardKey === "planning" ? (
@@ -5851,7 +5903,7 @@ function SalesBoard({ boardData, setBoardData, contentPieces, project, accentHex
   );
 }
 
-/* ---------- Learnings ----------
+/* ---------- Notes (formerly "Learnings") ----------
    The last of the 8 pipeline boards. Kept deliberately simple — a single
    free-text note, autosaved on every keystroke like the rest of the app's
    fields — rather than a structured retro template, per direct instruction. */
@@ -5859,7 +5911,7 @@ function LearningsBoard({ boardData, setBoardData }) {
   const notes = boardData.notes || "";
   return (
     <div style={{ padding: "24px 28px" }}>
-      <SectionLabel>Learnings</SectionLabel>
+      <SectionLabel>Notes</SectionLabel>
       <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 8, marginBottom: 14, lineHeight: 1.5, maxWidth: 560 }}>
         What worked, what didn't, what you'd do differently next time — jot it down while it's fresh.
       </div>
@@ -6402,7 +6454,7 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
   );
 }
 
-/* ---------- Inspiration and Planning Board ---------- */
+/* ---------- Plan Board (formerly "Inspiration and Planning") ---------- */
 function PlanningBoard({ content, setContent, accentHex }) {
   const canvasItems = content.canvasItems || [];
   const ideas = content.ideas || [];
