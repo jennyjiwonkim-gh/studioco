@@ -86,6 +86,18 @@ single-file app). Expired access tokens refresh once and retry automatically.
   vendor the libs.
 - The file must be named **`index.html`** — web servers serve that by default;
   any other name 404s at the site root.
+- `.claude/settings.local.json`'s git permission allowlist is intentionally
+  narrow (status/diff/log/show/add/commit -m/branch listing/checkout -b/
+  checkout main/fetch/remote -v/ls-files/ls-remote/stash list & push/plain
+  push/push -u origin) and deliberately excludes destructive or
+  history-rewriting commands (`push --force`/`-f`, `reset --hard`, `clean -f`,
+  `branch -D`, `checkout .`/`restore .`, `rebase -i`, `filter-branch`) so
+  those still prompt every time. But the matcher is prefix-based, so e.g.
+  `git push -u origin some-branch --force` would still match the `git push -u
+  origin *` allow-rule — the allowlist narrows the surface, it isn't a real
+  guarantee against a force-push slipping through. Never construct a
+  destructive git command without Jenny explicitly asking, regardless of what
+  the allowlist would technically permit.
 
 ## Deploy loop
 
@@ -101,17 +113,27 @@ on deliverables.
 
 ## Outstanding work
 
-1. ~~Verify the Supabase integration against the live project.~~ Done — live
-   auth + `app_state` persistence confirmed working end-to-end.
-2. Real AI-powered "Copy tasks" — currently exact-phrase matching; needs genuine
-   natural-language interpretation plus a confirm-before-applying step.
-3. Freeform image/screenshot paste on the Inspiration and Planning board
-   (sketch/text/eraser already work).
-4. ~~Full Office-style color picker.~~ Done — `ColorPickerPopover`
-   (brand presets + saturation/value square + hue slider + hex/RGB fields) is
-   live in the Inspiration and Planning board's canvas toolbar and reused for
-   Listing board color swatches.
-5. AI-generated storefront that reads a project's visual "vibe" from its photos.
-   Its own feature; do not ship a shallow version.
-6. Real Instagram / Shopify / Etsy integrations — need OAuth and a backend.
-7. Home landing screen needs real content beyond its current state.
+See `TODO.md` for the outstanding feature backlog.
+
+## Documentation file allocation
+
+Four `.md` files at the repo root, each with exactly one job. Keep items in
+the file that matches their nature — don't let one file absorb another's
+content:
+
+- **`CLAUDE.md`** (this file) — standing rules: non-negotiables, design
+  system, architecture facts, testing methodology, traps. Changes rarely,
+  survives across every session.
+- **`handoff.md`** — snapshot of the most recent session: what changed, what
+  state things are in, what's still ambiguous. Gets rewritten each session,
+  not accumulated.
+- **`PLAN.md`** — the single active initiative, with concrete steps.
+  Rewritten/replaced wholesale when the active initiative changes.
+- **`TODO.md`** — flat standing backlog, no dates or narrative. Items get
+  checked off or deleted as they land; new ones get appended as they come up.
+
+**Every time `handoff.md` is written** (i.e. at the end of a session), check
+`TODO.md` and `PLAN.md` against what actually happened: cross off / remove
+items that were completed or superseded, and add any new open items or
+follow-ups that surfaced during the session. Don't let either file drift out
+of sync with reality.
