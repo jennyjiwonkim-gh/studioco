@@ -7,132 +7,87 @@ Netlify (auto-builds from GitHub on push to `main`), backed by Supabase for
 persistence.
 
 ## Current Status (as of this session, 2026-08-06)
-- **Pushed to `main` and confirmed live**: commit `0bf4483` — last session's
-  full visual redesign (Home/nav/Content Library/Contacts/Tasks/Campaign
-  Library/Project View/alphabetized dropdowns) **plus** this session's photo
-  data-loss fix (see below). Verified live via a direct `curl` of the
-  deployed `index.html`: it now serves `heic-to`/`window.HeicTo` (the
-  earlier HEIC fix, commit `7c7aa9f`, was on `origin/main` but had never
-  actually gone live until this push — see "HEIC fix" below for why).
-- **Netlify plan upgraded**: Jenny moved from Free → **Personal** ($9/mo,
-  1,000 credits/month). No longer credit-constrained the way Free was.
-- **`CLAUDE.md` updated** (committed separately if not already — check
-  `git status`) with a new trap note about the narrowed git permission
-  allowlist (see "Permissions" below).
-- One thread is **explicitly unresolved** — see "Open Question" below.
+- Live site is still exactly commit `0bf4483` (last session's push) — **no
+  app code changed this session**, docs only.
+- Local commit **`75e4b44`** sits on top of that, containing this session's
+  full documentation restructure (see below). **Explicitly not pushed** —
+  Jenny asked directly not to push to `main` for this. Push whenever she
+  says so; nothing time-sensitive about it.
+- Netlify is still on the Personal plan (1,000 credits/mo). Jenny corrected
+  an assumption this session: don't treat that upgrade as removing cost
+  concerns — stay frugal about triggering deploys on principle, not just as
+  a policy against running out. Codified in both memory
+  (`feedback_frugal_netlify_credits.md`) and now `CLAUDE.md`'s "Deploy loop"
+  section directly, so it's durable in the repo itself, not just my memory.
 
 ## What Changed This Session
 
-### 1. Photo data-loss bug — root cause corrected, then fixed
-Last session's handoff blamed a Supabase payload-size limit. That was wrong.
-With Jenny's OK, connected directly to the live Supabase project
-(`hvqjpoqamxalitydrega`) and found the real cause: `usePersistentState`
-(`index.html` ~612-631) loads each persisted key into React state once per
-tab/session, and every edit debounces 300ms then overwrites the **entire**
-value for that key with no version check — pure last-write-wins. A stale
-session's unrelated edit could silently clobber a photo another session had
-just saved. `boardContent` itself was only ~4.5KB, nowhere near a size limit,
-and every save in the API logs was returning 200 — saves were succeeding,
-just overwriting each other.
+### 1. Documentation restructure — TODO.md / PLAN.md carved out
+`CLAUDE.md`'s "Outstanding work" and `handoff.md`'s "Exact Next Steps" /
+"Open Question" sections were getting heavy. Split into two new files:
+- **`TODO.md`** (new) — flat standing backlog, no dates/narrative. Holds the
+  5 feature items formerly in `CLAUDE.md` (AI copy-tasks, freeform paste,
+  storefront vibe reader, real IG/Shopify/Etsy integrations, Home screen
+  content) plus the still-unresolved `savePersisted` silent-failure item.
+- **`PLAN.md`** (new) — single active initiative only: the project landing
+  page redesign (`ProjectDashboard`/`BoardScreen`), with the reference
+  Artifact link and concrete steps. Gets replaced wholesale, not
+  accumulated, when the active initiative changes.
+- **`CLAUDE.md`** — "Outstanding work" replaced with a pointer to `TODO.md`.
+  New **"Documentation file allocation"** section added, spelling out each
+  of the four `.md` files' job and instructing: every time `handoff.md` is
+  written (i.e. end of session), cross-check `TODO.md`/`PLAN.md` against
+  what actually happened and reconcile them. This session is the first time
+  following that instruction — checked both; no items needed updating
+  (nothing on either list was touched this session).
+- **`handoff.md`** — trimmed to point at `PLAN.md`/`TODO.md` instead of
+  carrying "Exact Next Steps"/"Open Question" directly. This is also the
+  **first commit `handoff.md` has ever had** — it existed as an untracked
+  file across prior sessions until now.
 
-Jenny chose the real fix over a cheap optimistic-concurrency patch: photos
-now live in a new **Supabase Storage bucket (`photos`, public, per-user
-folder RLS)** instead of inline base64 in the `boardContent` blob.
-- `resizeImageFile` now resolves to a JPEG `Blob` (was a base64 data URL).
-- New `uploadPhotoToStorage`/`deletePhotoFromStorage` helpers hit the
-  Storage REST API directly (no SDK, same `authedFetch` pattern as the rest
-  of the app).
-- `ProductPage`'s `handleFiles`/`removePhoto` upload/delete through Storage;
-  photo objects are now `{ id, url, path }`, not `{ id, dataUrl }`. All four
-  `<img src>` call sites updated accordingly.
-- Verified end-to-end two ways: Jenny uploaded real photos
-  (`marina_vase.HEIC`, `mccall_bowls.heic`) through the actual Product page
-  UI via a local static server pointed at the real Supabase backend, and
-  independently confirmed via SQL that both objects landed in the `photos`
-  bucket with correct mimetype/size while `boardContent` stayed tiny.
-- Full writeup in memory: `project_photo_dataloss_bug.md`.
+### 2. Netlify credit philosophy reaffirmed
+Jenny explicitly corrected the assistant for framing the Free→Personal plan
+upgrade as meaning credits are "no longer a real cost concern." Standing
+instruction going forward: keep minimizing deploys on principle regardless
+of plan tier, keep preferring deploy previews over `main` pushes, never push
+to `main` without her explicit go-ahead. See `CLAUDE.md`'s Deploy loop
+section and memory `feedback_frugal_netlify_credits.md`.
 
-**Not fixed / still open**: the same last-write-wins pattern still applies
-to every other persisted key (`projects`, `tasks`, `contentLibrary`,
-`campaignLibrary`, `contacts`) — just without the dramatic "data vanishes"
-symptom since none of them embed large binary blobs. Out of scope this
-session; flag if it comes up again.
+### 3. Housekeeping notes (no action taken)
+- `Pottery tracker landing page.zip`, `marina_vase.HEIC`, and
+  `mccall_bowls.heic` — present at the start of this session, gone from disk
+  by the time of the commit. Not caused by anything in this session (never
+  staged/touched), never tracked by git either way. Flagging in case it's
+  unexpected on Jenny's end; no cleanup performed.
+- A new untracked file, `StudioCo Landing/image-gen-1.png` (dated today),
+  appeared during this session — also not created by anything done here.
+- Confirmed the `Pottery tracker landing page.zip` (before it disappeared)
+  was a claude.ai web design-tool export (`.dc` file, `image-slot.js`/
+  `support.js` scaffolding, pasted screenshots + a `studioco-v50.html` and
+  `uploads/CLAUDE.md`) — not something this Claude Code session or any
+  previous one produced.
+- Jenny confirmed she's fine with the rest of the untracked repo contents
+  (`.claude/`, `Archive/`, `Redesign/`, `SaleCo/`, `StudioCo Landing/`)
+  staying as-is — no cleanup requested, nothing actioned.
 
-### 2. Netlify billing investigation
-Jenny's Free plan hit its credit limit ~2 days after account creation.
-Traced it precisely via the connected Netlify account: **21 production
-deploys × 15 credits each = 315 credits**, exhausting the 300/month Free
-allotment almost exactly. **Not** Agent Runners (0 credits consumed — that
-was a red herring from an earlier tangent) — pure deploy volume, since every
-`git push` to `main` triggers one full-price production deploy regardless of
-change size.
-
-Also solved a standing mystery: the HEIC fix (`7c7aa9f`) was pushed to
-`origin/main` in an earlier session but never went live. Almost certainly
-because that push landed right as the account's credits ran out — Netlify
-silently blocks production deploys once credits hit zero, with no obvious
-in-app error at push time.
-
-Practical upshot, saved to memory (`project_deploy_gate.md`,
-`feedback_prefer_deploy_previews.md`):
-- Batch commits into fewer pushes — each push has a flat 15-credit cost.
-- **Prefer Netlify deploy previews (branch + PR) over pushing to `main`**
-  for verification — previews are free/unlimited on this plan tier,
-  confirmed by opening a real throwaway PR this session and checking the
-  billing page showed 0 credits consumed afterward.
-- **Important caveat**: `index.html` has no build step, so
-  `SUPABASE_URL`/the anon key are hardcoded in the file. A deploy preview
-  runs against the exact same live Supabase project/data as production —
-  it's not a sandboxed environment. Fine for "does this deploy correctly,"
-  not a safety net for testing something destructive.
-
-### 3. Permissions / tooling housekeeping
-- Jenny ran a separate session that used the `fewer-permission-prompts`
-  skill against this project and added two new read-only subagents:
-  `.claude/agents/studioco-pattern-scout.md` (inventories existing UI
-  patterns before a redesign — `Glob/Grep/Read` only) and
-  `.claude/agents/studioco-design-reviewer.md` (checks a change against
-  CLAUDE.md's design system after the fact — adds read-only `Bash` for `git
-  diff`). Both are legitimate and worth using for the upcoming project
-  landing page redesign.
-- That same pass had added a blanket `"Bash(git *)"` allow to
-  `.claude/settings.local.json`, which would've silently pre-approved
-  destructive git commands too. Narrowed it to ~24 specific safe
-  subcommands (status/diff/log/add/commit -m/checkout -b/push/etc.),
-  explicitly excluding `push --force`, `reset --hard`, `clean -f`,
-  `branch -D`, `checkout .`/`restore .`, `rebase -i`. Documented the
-  residual caveat (prefix-matching can't fully guard against a trailing
-  `--force`) in `CLAUDE.md`'s "Traps" section so it's permanent, not
-  session-local.
-
-## Open Question / Next Steps
-
-See `TODO.md` (the `savePersisted` silent-failure item — still needs the
-ambiguity in Jenny's original question resolved before building) and
-`PLAN.md` (the active initiative: project landing page redesign).
-
-This session also added a "Documentation file allocation" section to
-`CLAUDE.md` — `PLAN.md`/`TODO.md` now carve out active-work and backlog
-items that used to live in `CLAUDE.md`'s "Outstanding work" and this file's
-"Exact Next Steps." Check both against reality at the end of every session
-going forward.
+## Next Steps
+See `PLAN.md` for the active initiative (landing page redesign) and
+`TODO.md` for the backlog. Nothing session-specific left open beyond those —
+this was a pure documentation-hygiene session.
 
 ## Testing Environment Notes (carries forward)
-- No Node/npm available in this shell environment this session — the
-  esbuild syntax-check step from `CLAUDE.md`'s testing methodology couldn't
-  run. Fell back to the local static server + real-browser check instead,
-  which also catches JSX syntax errors since Babel-standalone parses
-  in-browser. Worth re ‑checking whether Node is available at the start of
-  next session; if so, restore the esbuild step.
-- A PowerShell `HttpListener` static file server has been left running
-  across sessions on `http://127.0.0.1:8744/`, serving the whole repo root
-  (script lives in a session scratchpad, not the repo). Confirmed still
-  live and serving current file contents as of this session — reuse it
-  rather than starting a new one on the same port (it'll just fail to bind
-  and you'll be using the old one anyway, which is fine since it reads from
-  disk per-request).
+- No Node/npm available in the shell environment as of the last session that
+  needed it (2026-08-06 photo-fix session) — the esbuild syntax-check step
+  from `CLAUDE.md`'s testing methodology couldn't run then. Worth
+  re-checking whether Node is available next time a code change (not just
+  docs) needs testing.
+- A PowerShell `HttpListener` static file server was left running across
+  sessions on `http://127.0.0.1:8744/`, serving the whole repo root (script
+  lives in a session scratchpad, not the repo) — last confirmed live
+  2026-08-06. Not touched this session (no code testing needed). Reuse
+  rather than starting a new one on the same port if still alive.
 - `.claude/worktrees/agile-mixing-cat/` still exists with a stale
-  `index.html`/`home-redesign-preview.html` (last touched 2026-08-05) — not
-  used this session, may be safe to clean up if it's not needed for the
-  landing page redesign reference beyond the `redesign-concept.html` file
-  already noted above.
+  `index.html`/`home-redesign-preview.html` (last touched 2026-08-05) —
+  `redesign-concept.html` inside it is the reference file `PLAN.md` points
+  to for the landing-page redesign, so keep the worktree until that's done;
+  safe to clean up after.

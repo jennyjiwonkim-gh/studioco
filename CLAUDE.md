@@ -102,7 +102,12 @@ single-file app). Expired access tokens refresh once and retry automatically.
 ## Deploy loop
 
 Commit to `main` → Netlify redeploys automatically. Changing Netlify *settings*
-does not trigger a redeploy; that needs a manual "Trigger deploy".
+does not trigger a redeploy; that needs a manual "Trigger deploy". Every
+production deploy costs a flat 15 credits regardless of change size — stay
+frugal about triggering one, on principle, independent of the current plan's
+credit ceiling. Don't push to `main` without Jenny's explicit go-ahead;
+prefer a branch/PR deploy preview (free, unlimited) when something just
+needs to be checked live rather than actually shipped.
 
 ## Working style
 
