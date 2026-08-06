@@ -272,6 +272,7 @@ const STUDIO_TAB_BG = {
   contacts: { icon: "bulbNeck", color: "var(--accent-navy)", corner: "br" },
   campaigns: { icon: "squiggly", color: "var(--accent-tomato)", corner: "br" },
   analytics: { icon: "angular", color: "var(--accent-cobalt)", corner: "br" },
+  scratchpad: { icon: "roundBulb", color: "var(--accent-royal)", corner: "br" },
 };
 
 const REAL_TASKS = [
@@ -491,7 +492,7 @@ async function authedFetch(path, options) {
    breaking change to any persisted shape. */
 const STORAGE_VERSION = "v1";
 const STORAGE_PREFIX = "studioco:" + STORAGE_VERSION + ":";
-const PERSIST_KEYS = ["projects", "tasks", "boardContent", "contentLibrary", "campaignLibrary", "contacts", "theme"];
+const PERSIST_KEYS = ["projects", "tasks", "boardContent", "contentLibrary", "campaignLibrary", "contacts", "theme", "scratchpad"];
 
 let storeCache = null;   // { key: rawJsonString }
 let storeUserId = null;
@@ -553,8 +554,43 @@ async function loadAllPersisted() {
    asked to delete. */
 let suppressPersist = false;
 
+/* savePersisted used to fail silently (console.warn only) — a dropped
+   connection or expired session meant lost work with no on-screen sign.
+   This pub/sub lets the UI show a persistent "Not saved" indicator, and
+   pendingRetries/scheduleRetry keep re-attempting failed writes on a timer
+   so a blip fixes itself instead of waiting for the user's next edit
+   (usePersistentState only re-saves a key when its value next changes). */
+let saveStatus = "ok"; // "ok" | "error"
+const saveStatusListeners = new Set();
+function publishSaveStatus(next) {
+  if (next === saveStatus) return;
+  saveStatus = next;
+  saveStatusListeners.forEach((fn) => fn(next));
+}
+function useSaveStatus() {
+  const [status, setStatus] = useState(saveStatus);
+  React.useEffect(() => {
+    saveStatusListeners.add(setStatus);
+    return () => saveStatusListeners.delete(setStatus);
+  }, []);
+  return status;
+}
+
+const pendingRetries = new Map(); // key -> value, for failed writes awaiting retry
+let retryTimer = null;
+function scheduleRetry() {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    for (const [key, value] of pendingRetries) savePersisted(key, value);
+  }, 5000);
+}
+
+// Returns whether the write actually landed — usePersistentState's dirty
+// tracking (below) relies on this to know whether a value is genuinely safe
+// to treat as saved, as opposed to still needing a retry/flush.
 async function savePersisted(key, value, keepalive) {
-  if (suppressPersist || !storeUserId) return;
+  if (suppressPersist || !storeUserId) return false;
   try {
     const res = await authedFetch("/rest/v1/app_state?on_conflict=user_id,key", {
       method: "POST",
@@ -562,9 +598,22 @@ async function savePersisted(key, value, keepalive) {
       headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({ user_id: storeUserId, key, value: JSON.stringify(value), updated_at: new Date().toISOString() }),
     });
-    if (!res.ok) console.warn("StudioCo: could not save", key, await res.text());
+    if (!res.ok) {
+      console.warn("StudioCo: could not save", key, await res.text());
+      pendingRetries.set(key, value);
+      publishSaveStatus("error");
+      scheduleRetry();
+      return false;
+    }
+    pendingRetries.delete(key);
+    if (pendingRetries.size === 0) publishSaveStatus("ok");
+    return true;
   } catch (e) {
     console.warn("StudioCo: could not save", key, e);
+    pendingRetries.set(key, value);
+    publishSaveStatus("error");
+    scheduleRetry();
+    return false;
   }
 }
 
@@ -613,16 +662,32 @@ function usePersistentState(key, initialValue) {
   const [value, setValue] = useState(initialValue);
   const latest = React.useRef(value);
   latest.current = value;
+  // True whenever this key has a local change not yet confirmed saved.
+  // Without this, the pagehide flush below would unconditionally re-save
+  // the tab's last-known value on every close/reload — including an idle
+  // tab that's simply been open a while with nothing new to write — and
+  // could silently clobber a newer edit saved from another tab or device
+  // in the meantime.
+  const dirty = React.useRef(false);
 
   React.useEffect(() => {
-    const id = setTimeout(() => savePersisted(key, value), 300);
+    dirty.current = true;
+    const id = setTimeout(async () => {
+      const saved = await savePersisted(key, value);
+      // Only clear dirty if nothing newer has landed while this save was in
+      // flight — otherwise a fast second edit could get wrongly marked clean.
+      if (saved && latest.current === value) dirty.current = false;
+    }, 300);
     return () => clearTimeout(id);
   }, [key, value]);
 
-  // A debounced write can still be in flight when the tab closes, so flush
-  // synchronously on pagehide — otherwise the last keystrokes are lost.
+  // A debounced write can still be in flight (or retrying after a failure)
+  // when the tab closes, so flush synchronously on pagehide — but only if
+  // there's actually something unsaved; see `dirty` above.
   React.useEffect(() => {
-    const flush = () => savePersisted(key, latest.current, true);
+    const flush = () => {
+      if (dirty.current) savePersisted(key, latest.current, true);
+    };
     window.addEventListener("pagehide", flush);
     return () => window.removeEventListener("pagehide", flush);
   }, [key]);
@@ -650,6 +715,7 @@ const CAMPAIGN_LIBRARY_SEED = [
 const CONTENT_LIBRARY_SEED = {
   types: ["Carousel", "Long-form video", "Reel — no explainer", "Reel — talk to camera", "Reel — voiceover", "Story"],
   series: ["Motivation Monday", "WIP Wednesday", "Feature Friday"],
+  platforms: ["Instagram", "TikTok", "YouTube"],
 };
 
 /* Resolves window.storage once, then hands AppInner fully-formed initial
@@ -673,9 +739,13 @@ function StudioApp({ onSignOut, email }) {
         projects: persisted.projects ?? SEED_PROJECTS,
         tasks: persisted.tasks ?? SEED_TASKS,
         boardContent: persisted.boardContent ?? {},
-        contentLibrary: persisted.contentLibrary ?? CONTENT_LIBRARY_SEED,
+        // Spread the seed first so a newly-added library list (e.g. platforms)
+        // gets a sensible default even for an account whose saved
+        // contentLibrary predates it, instead of coming back undefined.
+        contentLibrary: { ...CONTENT_LIBRARY_SEED, ...(persisted.contentLibrary ?? {}) },
         campaignLibrary: persisted.campaignLibrary ?? CAMPAIGN_LIBRARY_SEED,
         contacts: persisted.contacts ?? [],
+        scratchpad: persisted.scratchpad ?? "",
         // First run follows the OS preference; after that the saved choice wins.
         theme: persisted.theme ?? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
       });
@@ -736,6 +806,7 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   const [contentLibrary, setContentLibrary] = usePersistentState("contentLibrary", initial.contentLibrary);
   const [campaignLibrary, setCampaignLibrary] = usePersistentState("campaignLibrary", initial.campaignLibrary);
   const [contacts, setContacts] = usePersistentState("contacts", initial.contacts);
+  const [scratchpad, setScratchpad] = usePersistentState("scratchpad", initial.scratchpad);
   const [navOpen, setNavOpen] = useState(false);
   const [theme, setTheme] = usePersistentState("theme", initial.theme);
 
@@ -816,6 +887,8 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
           setCampaignLibrary={setCampaignLibrary}
           contacts={contacts}
           setContacts={setContacts}
+          scratchpad={scratchpad}
+          setScratchpad={setScratchpad}
         />
       )}
       {screen.name === "projectDashboard" && (
@@ -866,6 +939,20 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   );
 }
 
+function SaveStatusIndicator({ phone }) {
+  const status = useSaveStatus();
+  if (status !== "error") return null;
+  return (
+    <div
+      title="Some changes haven't saved yet. StudioCo will keep retrying automatically — keep this tab open until it clears."
+      style={{ display: "flex", alignItems: "center", gap: 5, color: COLORS.tomato, fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}
+    >
+      <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} aria-hidden="true" />
+      {!phone && "Not saved"}
+    </div>
+  );
+}
+
 function TopBar({ onLogoClick, onMenuClick, theme, onToggleTheme, viewport }) {
   const compact = viewport && viewport.isCompact;
   const phone = viewport && viewport.isPhone;
@@ -893,6 +980,7 @@ function TopBar({ onLogoClick, onMenuClick, theme, onToggleTheme, viewport }) {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 14, flexShrink: 0 }}>
+        <SaveStatusIndicator phone={phone} />
         <button
           onClick={onToggleTheme}
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
@@ -916,6 +1004,7 @@ const STUDIO_NAV_TABS = [
   { key: "contacts", label: "Contacts", icon: "ti-address-book" },
   { key: "campaigns", label: "Campaign Library", icon: "ti-speakerphone" },
   { key: "analytics", label: "Analytics", icon: "ti-chart-bar" },
+  { key: "scratchpad", label: "Scratchpad", icon: "ti-notes" },
 ];
 
 /* ---------- Nav Drawer ----------
@@ -1390,7 +1479,7 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
                 onClick={() => onOpenProject(p.id)}
                 style={{ background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden", cursor: "pointer" }}
               >
-                <div style={{ height: 172, background: COLORS.cream, borderBottom: `3px solid ${a.hex}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ aspectRatio: "3 / 4", background: COLORS.cream, borderBottom: `3px solid ${a.hex}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {photo ? (
                     <img src={photo.url} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   ) : (
@@ -1525,7 +1614,7 @@ function HomeLanding({ projects, tasks, setTasks, onOpenProject, boardContent, s
   );
 }
 
-function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, tab, setTab, calMode, setCalMode, calCursor, setCalCursor, contentLibrary, setContentLibrary, boardContent, setBoardContent, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
+function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, tab, setTab, calMode, setCalMode, calCursor, setCalCursor, contentLibrary, setContentLibrary, boardContent, setBoardContent, campaignLibrary, setCampaignLibrary, contacts, setContacts, scratchpad, setScratchpad }) {
   return (
     <div style={{ padding: "32px 32px 64px" }}>
       <div style={{ display: "flex", justifyContent: "space-evenly", alignItems: "center", marginBottom: 28, borderBottom: `1px solid ${COLORS.hairline}`, flexWrap: "wrap" }}>
@@ -1553,6 +1642,7 @@ function StudioScreen({ projects, setProjects, tasks, setTasks, onOpenProject, t
       {tab === "library" && <ContentLibraryView contentLibrary={contentLibrary} setContentLibrary={setContentLibrary} boardContent={boardContent} setBoardContent={setBoardContent} projects={projects} tasks={tasks} onOpenProject={onOpenProject} />}
       {tab === "campaigns" && <CampaignLibraryView campaignLibrary={campaignLibrary} setCampaignLibrary={setCampaignLibrary} />}
       {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
+      {tab === "scratchpad" && <ScratchpadView value={scratchpad} onChange={setScratchpad} />}
     </div>
   );
 }
@@ -1580,7 +1670,7 @@ function buildAnalyticsRows(projects, boardContent) {
         projectName: p.name,
         type: "Content",
         title: (piece.title && piece.title.trim()) || "Untitled content piece",
-        platform: piece.type || "—",
+        platform: piece.platform || "—",
         reach: Number(perf.reach) || 0,
         secondary: Number(perf.engagement) || 0,
         revenue: 0,
@@ -1778,6 +1868,7 @@ function RevenueTrendChart({ listingRows }) {
    every project, so the same names mean the same thing everywhere. Also
    editable inline from the Content Board itself via "+ Add new…" in each dropdown. */
 function ContentLibraryView({ contentLibrary, setContentLibrary, boardContent, setBoardContent, projects, tasks, onOpenProject }) {
+  const viewport = useViewport();
   // Renaming a library entry must also update every content piece that currently
   // references the old value by name, or those pieces silently fall out of sync.
   const propagateRename = (field, oldVal, newVal) => {
@@ -1802,7 +1893,7 @@ function ContentLibraryView({ contentLibrary, setContentLibrary, boardContent, s
         <div style={{ fontSize: 11.5, color: COLORS.muted, marginBottom: 20, lineHeight: 1.5 }}>
           Shared across every project's Content board — rename or remove here, and it updates everywhere it's used.
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+        <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1fr 1fr", gap: 32 }}>
           <LibraryListEditor
             title="Content types"
             items={contentLibrary.types}
@@ -1824,6 +1915,17 @@ function ContentLibraryView({ contentLibrary, setContentLibrary, boardContent, s
               propagateRename("series", oldVal, newVal);
             }}
             placeholder="Add a series…"
+          />
+          <LibraryListEditor
+            title="Platform"
+            items={contentLibrary.platforms}
+            onAdd={(val) => setContentLibrary((prev) => ({ ...prev, platforms: [...prev.platforms, val] }))}
+            onRemove={(val) => setContentLibrary((prev) => ({ ...prev, platforms: prev.platforms.filter((v) => v !== val) }))}
+            onEdit={(oldVal, newVal) => {
+              setContentLibrary((prev) => ({ ...prev, platforms: prev.platforms.map((v) => (v === oldVal ? newVal : v)) }));
+              propagateRename("platform", oldVal, newVal);
+            }}
+            placeholder="Add a platform type…"
           />
         </div>
       </div>
@@ -2144,6 +2246,38 @@ function CampaignTemplateCard({ template, onUpdate, onRemove }) {
 const CONTACT_RELATIONSHIPS = ["Customer", "Gallery", "Shop", "Collaborator", "Press", "Other"];
 
 const CONTACT_COLUMNS = "1fr 1.3fr 1fr 90px 100px 1.3fr 20px";
+
+/* ---------- Scratchpad ----------
+   One big freeform notes page, autosaved like everything else — no structure,
+   no fields, just a place to type. */
+function ScratchpadView({ value, onChange }) {
+  return (
+    <div>
+      <SectionLabel>Scratchpad</SectionLabel>
+      <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 4, marginBottom: 14 }}>
+        Freeform notes — jot down anything. Autosaves as you type.
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Start typing…"
+        style={{
+          width: "100%",
+          minHeight: "65vh",
+          background: COLORS.paper,
+          border: `1px solid ${COLORS.hairline}`,
+          borderRadius: RADIUS,
+          padding: "20px 22px",
+          fontSize: 13.5,
+          lineHeight: 1.65,
+          fontFamily: "inherit",
+          color: COLORS.ink,
+          resize: "vertical",
+        }}
+      />
+    </div>
+  );
+}
 
 function ContactsView({ contacts, setContacts }) {
   const [draft, setDraft] = useState({ name: "", email: "", phone: "", relationship: "Customer", notes: "" });
@@ -6615,7 +6749,7 @@ function dateToInputStr(d) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, projects, allTasks, category, columnLabel, extraFields }) {
+function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, projects, allTasks, category, columnLabel, extraFields, pieceOptions }) {
   const today = appToday();
   const [newTitle, setNewTitle] = useState("");
   const [newDate, setNewDate] = useState("");
@@ -6742,7 +6876,7 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
 
   const rowStyle = {
     display: "grid",
-    gridTemplateColumns: "20px 1fr 130px 100px 100px 22px",
+    gridTemplateColumns: pieceOptions ? "20px 1fr 130px 100px 100px 130px 22px" : "20px 1fr 130px 100px 100px 22px",
     alignItems: "center",
     gap: 10,
     padding: "7px 0",
@@ -6835,6 +6969,20 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
           <span onClick={() => setEditingId(t.id)} style={{ fontSize: 11, color: COLORS.muted, cursor: "text" }}>{fmtMinutesAmPm(endMinutes)}</span>
         )}
 
+        {pieceOptions && (
+          <select
+            value={t.contentPieceId || ""}
+            onChange={(e) => updateTaskField(t.id, "contentPieceId", e.target.value || undefined)}
+            title="Assign to content piece"
+            style={{ ...fieldInputStyle, padding: "5px 4px", fontSize: 10.5, cursor: "pointer" }}
+          >
+            <option value="">Unassigned</option>
+            {pieceOptions.map((p) => (
+              <option key={p.id} value={p.id}>{p.title}</option>
+            ))}
+          </select>
+        )}
+
         {isEditing ? (
           <button onClick={finishEditing} title="Done editing" style={{ background: "none", border: "none", cursor: "pointer", color: accentHex, padding: 0 }}>
             <i className="ti ti-check" style={{ fontSize: 14 }} aria-hidden="true" />
@@ -6871,6 +7019,11 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
             {col.label}
           </div>
         ))}
+        {pieceOptions && (
+          <div style={{ fontSize: 9.5, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            Piece
+          </div>
+        )}
         <div />
       </div>
 
@@ -6907,6 +7060,7 @@ function CategoryTaskTable({ tasks, setAllTasks, currentProjectId, accentHex, pr
           onKeyDown={(e) => { if (e.key === "Enter") submitRow(); }}
           style={fieldInputStyle}
         />
+        {pieceOptions && <div />}
         <div />
       </div>
 
@@ -6954,7 +7108,7 @@ function ContentBoard({ boardData, setBoardData, allTasks, setAllTasks, currentP
   };
 
   const addPiece = () => {
-    const newPiece = { id: "piece-" + Date.now(), title: "", series: "", episode: "", type: "", trend: "", music: "", voiceover: "", caption: "", notes: "" };
+    const newPiece = { id: "piece-" + Date.now(), title: "", series: "", episode: "", type: "", platform: "", trend: "", music: "", voiceover: "", caption: "", notes: "" };
     setBoardData((prev) => ({ ...prev, pieces: [...(prev.pieces || []), newPiece] }));
     setJustAddedId(newPiece.id);
   };
@@ -6982,7 +7136,7 @@ function ContentBoard({ boardData, setBoardData, allTasks, setAllTasks, currentP
       <div style={{ marginBottom: 24 }}>
         <SectionLabel>Unassigned tasks</SectionLabel>
         <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 4, marginBottom: 10 }}>
-          Content tasks not yet tied to a specific piece below — add one directly, or use "Add content piece" to organize it under a post, reel, or carousel.
+          Content tasks not yet tied to a specific piece below — add one directly, use "Add content piece" to organize it under a post, reel, or carousel, or assign it to an existing piece using the Piece column.
         </div>
         <CategoryTaskTable
           tasks={unassignedTasks}
@@ -6993,6 +7147,7 @@ function ContentBoard({ boardData, setBoardData, allTasks, setAllTasks, currentP
           allTasks={allTasks}
           category="content"
           columnLabel="Task: Content"
+          pieceOptions={pieces.map((p) => ({ id: p.id, title: p.title.trim() || "Untitled content piece" }))}
         />
       </div>
 
@@ -7147,7 +7302,7 @@ function ContentPieceForm({ piece, onUpdate, contentLibrary, setContentLibrary }
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
         <div>
           <div style={labelStyle}>Type</div>
           <LibraryPickerField
@@ -7156,6 +7311,16 @@ function ContentPieceForm({ piece, onUpdate, contentLibrary, setContentLibrary }
             options={contentLibrary.types}
             onAddOption={(val) => setContentLibrary((prev) => ({ ...prev, types: [...prev.types, val] }))}
             placeholder="Select type…"
+          />
+        </div>
+        <div>
+          <div style={labelStyle}>Platform</div>
+          <LibraryPickerField
+            value={piece.platform}
+            onChange={(val) => onUpdate("platform", val)}
+            options={contentLibrary.platforms}
+            onAddOption={(val) => setContentLibrary((prev) => ({ ...prev, platforms: [...prev.platforms, val] }))}
+            placeholder="Select platform…"
           />
         </div>
         <div>
@@ -7228,7 +7393,11 @@ function LibraryPickerField({ value, onChange, options, onAddOption, placeholder
     <div style={{ position: "relative" }}>
       <select
         value={options.includes(value) ? value : ""}
-        onChange={(e) => { if (e.target.value === "__add") { setAdding(true); } else { onChange(e.target.value); } }}
+        onChange={(e) => {
+          if (e.target.value === "__add") setAdding(true);
+          else if (e.target.value === "__clear") onChange("");
+          else onChange(e.target.value);
+        }}
         style={{
           background: COLORS.cream,
           border: `1px solid ${COLORS.hairline}`,
@@ -7247,6 +7416,7 @@ function LibraryPickerField({ value, onChange, options, onAddOption, placeholder
         {options.map((opt) => (
           <option key={opt} value={opt}>{opt}</option>
         ))}
+        {value && <option value="__clear">— Clear —</option>}
         <option value="__add">+ Add new…</option>
       </select>
       <DropdownArrow />
