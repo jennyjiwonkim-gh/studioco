@@ -718,6 +718,14 @@ const CONTENT_LIBRARY_SEED = {
   platforms: ["Instagram", "TikTok", "YouTube"],
 };
 
+// Platform moved from a single value to multi-select — pieces saved before
+// that change still carry the old singular `platform` string, so every read
+// site goes through this instead of touching `piece.platforms` directly.
+function piecePlatforms(piece) {
+  if (piece.platforms) return piece.platforms;
+  return piece.platform ? [piece.platform] : [];
+}
+
 /* Resolves window.storage once, then hands AppInner fully-formed initial
    values. This is the async gate: nothing in AppInner (or any board under
    it) ever has to know storage is async, because it never mounts until the
@@ -1677,7 +1685,7 @@ function buildAnalyticsRows(projects, boardContent) {
         projectName: p.name,
         type: "Content",
         title: (piece.title && piece.title.trim()) || "Untitled content piece",
-        platform: piece.platform || "—",
+        platform: piecePlatforms(piece).join(", ") || "—",
         reach: Number(perf.reach) || 0,
         secondary: Number(perf.engagement) || 0,
         revenue: 0,
@@ -4206,20 +4214,34 @@ const PROJECT_META = {
 function ProjectSwitchToggle({ projects, value, onChange }) {
   const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
   return (
-    <div style={{ position: "relative", width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+    <div style={{ position: "relative", width: 30, height: 26, flexShrink: 0 }}>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label="Switch project"
-        style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", appearance: "none", WebkitAppearance: "none", border: "none", background: "none" }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          background: COLORS.paper,
+          border: `1px solid ${COLORS.hairline}`,
+          borderRadius: RADIUS,
+          padding: "0 18px 0 8px",
+          fontSize: 13,
+          fontFamily: "inherit",
+          fontWeight: 500,
+          color: "transparent",
+          cursor: "pointer",
+          appearance: "none",
+          WebkitAppearance: "none",
+        }}
       >
         {sorted.map((p) => (
-          <option key={p.id} value={p.id}>{p.name}</option>
+          <option key={p.id} value={p.id} style={{ color: COLORS.ink, fontFamily: "inherit" }}>{p.name}</option>
         ))}
       </select>
-      <svg width="10" height="7" viewBox="0 0 9 6" fill="none" style={{ pointerEvents: "none" }} aria-hidden="true">
-        <path d="M1 1L4.5 4.5L8 1" stroke={COLORS.muted} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <DropdownArrow />
     </div>
   );
 }
@@ -4356,98 +4378,105 @@ function ProjectDashboard({ project, projects, setProjects, tasks, onBack, onOpe
         }
       />
 
-      {/* Product Details — the final-listing spec sheet, separate from the 8
-          pipeline boards since it isn't a stage, it's a persistent record. */}
-      <div
-        onClick={() => onOpenProduct(project.id)}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-          background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderLeft: `4px solid ${a.hex}`,
-          borderRadius: RADIUS, padding: "14px 18px", marginBottom: 24, cursor: "pointer",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>Product details</div>
-          <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 2 }}>
-            Final specs for selling this piece — photos, dimensions, price, care notes
-          </div>
-        </div>
-        <span style={{ fontSize: 18, color: COLORS.muted }}>→</span>
-      </div>
-
-      {/* Metrics row */}
-      <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 1, background: COLORS.hairline, border: `1px solid ${COLORS.hairline}`, marginBottom: 28 }}>
-        <MetricCell
-          label="Completed progress"
-          value={`${pct}%`}
-          sub={`${craftCompleted} of ${craftTasks.length} craft tasks  |  ${contentCompleted} of ${contentTasks.length} content tasks`}
-        />
-        <MetricCell label="Target post date" value={meta.targetPostDate ? fmtDate(meta.targetPostDate) : "—"} sub={meta.targetPostDate ? null : "Not set"} />
-        <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
-          <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Priority</div>
-          {editingPriority ? (
-            <select
-              autoFocus
-              value={project.priority || ""}
-              onChange={(e) => updatePriority(e.target.value)}
-              onBlur={() => setEditingPriority(false)}
-              style={{
-                fontSize: 15,
-                fontWeight: 700,
-                background: COLORS.cream,
-                border: `1px solid ${COLORS.hairline}`,
-                borderRadius: RADIUS,
-                padding: "3px 6px",
-                fontFamily: "inherit",
-                color: COLORS.ink,
-              }}
-            >
-              <option value="">—</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          ) : (
-            <div onClick={() => setEditingPriority(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{priority}</div>
-          )}
-        </div>
-        <MetricCell label="Est. materials" value={meta.budget ? `$${meta.budget}` : "—"} />
-      </div>
-
-      {/* Two-column: boards nav + this week / upcoming */}
-      <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1.3fr 1fr", gap: 24, alignItems: "start" }}>
-        <div>
-          <SectionLabel>Boards</SectionLabel>
-          <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "repeat(2, 1fr)", gap: 8, marginTop: 10 }}>
-            {BOARD_STAGES.map((b, i) => (
-              <div
-                key={b.key}
-                onClick={() => onOpenBoard(project.id, b.key)}
-                style={{
-                  background: COLORS.paper,
-                  border: `1px solid ${COLORS.hairline}`,
-                  borderRadius: RADIUS,
-                  padding: "13px 14px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-                <span style={{ fontSize: 10.5, color: COLORS.royalBlue, fontWeight: 700, minWidth: 16 }}>{String(i + 1).padStart(2, "0")}</span>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{b.label}</span>
+      {/* Same bordered, accent-topped card every board uses (see BoardScreen)
+          so the Overview tab flips against the other six without the page
+          shell changing shape — only the content inside the card differs. */}
+      <div style={{ borderTop: `3px solid ${a.hex}`, background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden" }}>
+        <div style={{ padding: "24px 28px" }}>
+          {/* Product Details — the final-listing spec sheet, separate from the 8
+              pipeline boards since it isn't a stage, it's a persistent record. */}
+          <div
+            onClick={() => onOpenProduct(project.id)}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+              background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderLeft: `4px solid ${a.hex}`,
+              borderRadius: RADIUS, padding: "14px 18px", marginBottom: 24, cursor: "pointer",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Product details</div>
+              <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 2 }}>
+                Final specs for selling this piece — photos, dimensions, price, care notes
               </div>
-            ))}
+            </div>
+            <span style={{ fontSize: 18, color: COLORS.muted }}>→</span>
           </div>
-        </div>
 
-        <div>
-          <SectionLabel>This week</SectionLabel>
-          <TaskMiniList items={thisWeekTasks} accentHex={a.hex} empty="Nothing scheduled this week" />
+          {/* Metrics row */}
+          <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 1, background: COLORS.hairline, border: `1px solid ${COLORS.hairline}`, marginBottom: 28 }}>
+            <MetricCell
+              label="Completed progress"
+              value={`${pct}%`}
+              sub={`${craftCompleted} of ${craftTasks.length} craft tasks  |  ${contentCompleted} of ${contentTasks.length} content tasks`}
+            />
+            <MetricCell label="Target post date" value={meta.targetPostDate ? fmtDate(meta.targetPostDate) : "—"} sub={meta.targetPostDate ? null : "Not set"} />
+            <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
+              <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Priority</div>
+              {editingPriority ? (
+                <select
+                  autoFocus
+                  value={project.priority || ""}
+                  onChange={(e) => updatePriority(e.target.value)}
+                  onBlur={() => setEditingPriority(false)}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    background: COLORS.cream,
+                    border: `1px solid ${COLORS.hairline}`,
+                    borderRadius: RADIUS,
+                    padding: "3px 6px",
+                    fontFamily: "inherit",
+                    color: COLORS.ink,
+                  }}
+                >
+                  <option value="">—</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              ) : (
+                <div onClick={() => setEditingPriority(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{priority}</div>
+              )}
+            </div>
+            <MetricCell label="Est. materials" value={meta.budget ? `$${meta.budget}` : "—"} />
+          </div>
 
-          <div style={{ marginTop: 22 }}>
-            <SectionLabel>Upcoming</SectionLabel>
-            <TaskMiniList items={upcomingTasks} accentHex={a.hex} empty="Nothing scheduled yet" />
+          {/* Two-column: boards nav + this week / upcoming */}
+          <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1.3fr 1fr", gap: 24, alignItems: "start" }}>
+            <div>
+              <SectionLabel>Boards</SectionLabel>
+              <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "repeat(2, 1fr)", gap: 8, marginTop: 10 }}>
+                {BOARD_STAGES.map((b, i) => (
+                  <div
+                    key={b.key}
+                    onClick={() => onOpenBoard(project.id, b.key)}
+                    style={{
+                      background: COLORS.cream,
+                      border: `1px solid ${COLORS.hairline}`,
+                      borderRadius: RADIUS,
+                      padding: "13px 14px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <span style={{ fontSize: 10.5, color: COLORS.royalBlue, fontWeight: 700, minWidth: 16 }}>{String(i + 1).padStart(2, "0")}</span>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{b.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <SectionLabel>This week</SectionLabel>
+              <TaskMiniList items={thisWeekTasks} accentHex={a.hex} empty="Nothing scheduled this week" />
+
+              <div style={{ marginTop: 22 }}>
+                <SectionLabel>Upcoming</SectionLabel>
+                <TaskMiniList items={upcomingTasks} accentHex={a.hex} empty="Nothing scheduled yet" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -4987,12 +5016,13 @@ function UnitRow({ label, unit, accentHex, fieldStyle, onToggle, onDateChange })
 function BoardScreen({ projectId, boardKey, projects, setProjects, onBack, onGoOverview, onSwitchProject, onSwitchBoard, onOpenProduct, boardContent, setBoardContent, tasks, setTasks, contentLibrary, setContentLibrary, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
   const project = projects.find((p) => p.id === projectId);
   const board = BOARD_STAGES.find((b) => b.key === boardKey);
+  const viewport = useViewport();
   if (!project || !board) return null;
   const a = PROJECT_ACCENTS[project.accentIdx];
   const contentKey = projectId + ":" + boardKey;
 
   return (
-    <div style={{ padding: "28px 32px 64px" }}>
+    <div style={{ padding: viewport.isPhone ? "22px 16px 48px" : viewport.isTablet ? "28px 22px 56px" : "32px 32px 64px" }}>
       <ProjectScreenHeader
         project={project}
         projects={projects}
@@ -7160,7 +7190,7 @@ function ContentBoard({ boardData, setBoardData, allTasks, setAllTasks, currentP
   };
 
   const addPiece = () => {
-    const newPiece = { id: "piece-" + Date.now(), title: "", series: "", episode: "", type: "", platform: "", trend: "", music: "", voiceover: "", caption: "", notes: "" };
+    const newPiece = { id: "piece-" + Date.now(), title: "", series: "", episode: "", type: "", platforms: [], trend: "", music: "", voiceover: "", caption: "", notes: "" };
     setBoardData((prev) => ({ ...prev, pieces: [...(prev.pieces || []), newPiece] }));
     setJustAddedId(newPiece.id);
   };
@@ -7367,12 +7397,12 @@ function ContentPieceForm({ piece, onUpdate, contentLibrary, setContentLibrary }
         </div>
         <div>
           <div style={labelStyle}>Platform</div>
-          <LibraryPickerField
-            value={piece.platform}
-            onChange={(val) => onUpdate("platform", val)}
+          <MultiLibraryPickerField
+            value={piecePlatforms(piece)}
+            onChange={(val) => onUpdate("platforms", val)}
             options={contentLibrary.platforms}
             onAddOption={(val) => setContentLibrary((prev) => ({ ...prev, platforms: [...prev.platforms, val] }))}
-            placeholder="Select platform…"
+            placeholder="No platforms in library yet — add one"
           />
         </div>
         <div>
@@ -7472,6 +7502,77 @@ function LibraryPickerField({ value, onChange, options, onAddOption, placeholder
         <option value="__add">+ Add new…</option>
       </select>
       <DropdownArrow />
+    </div>
+  );
+}
+
+// Multi-select sibling of LibraryPickerField — toggle pills instead of a
+// single dropdown (a dropdown can't show more than one selection cleanly),
+// plus the same inline "+ Add new…" library-growing affordance. Same
+// toggle-pill language as ProductPage's care-tag picker.
+function MultiLibraryPickerField({ value, onChange, options, onAddOption, placeholder }) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const selected = value || [];
+
+  const toggle = (opt) => {
+    onChange(selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt]);
+  };
+
+  const commitNew = () => {
+    const val = draft.trim();
+    if (val) {
+      if (!options.includes(val)) onAddOption(val);
+      if (!selected.includes(val)) onChange([...selected, val]);
+    }
+    setAdding(false);
+    setDraft("");
+  };
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 7, alignItems: "center" }}>
+      {options.length === 0 && !adding && (
+        <span style={{ fontSize: 12, color: COLORS.muted, fontStyle: "italic" }}>{placeholder}</span>
+      )}
+      {options.map((opt) => {
+        const active = selected.includes(opt);
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            style={{
+              fontFamily: "inherit", fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: RADIUS, cursor: "pointer",
+              background: active ? COLORS.ink : "none", color: active ? COLORS.paper : COLORS.muted,
+              border: `1px solid ${active ? COLORS.ink : COLORS.hairline}`,
+            }}
+          >
+            {opt}
+          </button>
+        );
+      })}
+      {adding ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitNew}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitNew();
+            if (e.key === "Escape") { setAdding(false); setDraft(""); }
+          }}
+          placeholder="New value…"
+          style={{ background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "6px 10px", fontSize: 11.5, fontFamily: "inherit", color: COLORS.ink, width: 110 }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: RADIUS, cursor: "pointer", background: "none", color: COLORS.muted, border: `1px dashed ${COLORS.hairline}` }}
+        >
+          + Add new…
+        </button>
+      )}
     </div>
   );
 }
