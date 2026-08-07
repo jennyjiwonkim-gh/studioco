@@ -35,12 +35,30 @@ controls or body copy. Everything inside the app proper is still Inter.
 
 **Static assets:** `assets/` at the repo root, served by Netlify alongside
 `index.html` and referenced by relative path — the only non-`.md`, non-HTML
-content in the repo. `assets/hero-vessel.jpg` is the landing hero photograph,
-chosen by Jenny: a Pexels photo by **Raymond Petrik** (free to use under the
-Pexels licence, no attribution required). It is downscaled to 1200px wide at
-q82 — about 233 KB, from a 4104x6039 / 4 MB original. Always resize and
-recompress before committing an image; do not ship camera-sized originals, and
-do not base64 them into `index.html`, which is already ~375 KB.
+content in the repo. Both current images come from the same Pexels photo by
+**Raymond Petrik** (free to use under the Pexels licence, no attribution
+required), a 4104x6039 / 4 MB original that lives outside the repo in
+`StudioCo Landing/`:
+
+- `hero-vessel.jpg` — the hero background, downscaled to 1200px wide at q82
+  (~233 KB).
+- `vase-cutout.jpg` — the same vase with its background removed, for the
+  waitlist band. **It is a JPEG, not a PNG, and its background is not
+  transparent — it is flood-filled with `#111111` to match `--ink`.** As a
+  transparent PNG this was 1.7 MB; composited onto the band's own colour it is
+  107 KB and looks identical. The catch: if that band ever stops being
+  `#111111`, this image will show as a dark rectangle and must be re-exported.
+
+Always resize and recompress before committing an image; do not ship
+camera-sized originals, and do not base64 them into `index.html`, which is
+already ~375 KB.
+
+Background removal is worth a note: the vase is lit from the right, so its
+shadowed left edge is *darker* than the shadowed wall beside it. No threshold
+or flood-fill separates them — both were tried and both failed. Use a real
+matting tool (Jenny used remove.bg). Its free tier returns a small preview, so
+the trick is to take the alpha from that preview, upscale it, and apply it to
+the full-resolution original rather than upscaling the preview itself.
 Cream `#F8F6F1` background. Project identity is carried by a **colored left-border
 stripe** plus a vessel silhouette icon — never by tinted background fills.
 

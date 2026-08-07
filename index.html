@@ -7511,11 +7511,10 @@ const LANDING_SECTION_MARKS = [
     desc: "Understand what’s working and make smarter creative decisions." },
 ];
 
-/* Waitlist band geometry. ProjectIcon draws on a 24x26 viewBox, so its
-   rendered height is size * 26/24 — the half-height crop depends on that. */
+/* Waitlist band geometry. The photograph is sized off the band rather than
+   given a fixed height — see the note where it's rendered. */
 const LANDING_BAND_PAD_Y = 44;
-const LANDING_VASE_SIZE = 240;
-const LANDING_VASE_H = LANDING_VASE_SIZE * (26 / 24);
+const LANDING_VASE_COL = 380; // column reserved for the photograph
 
 /* The waitlist CTA is deliberately a dark card sitting on a light page, so it
    can't read COLORS.* — those resolve to light values on this always-light
@@ -7894,14 +7893,28 @@ function LandingScreen({ onLogIn }) {
           far left and bleeds off the bottom edge of the band, headline and
           copy stack beside it, and the form sits on the right. */}
       <div id="waitlist" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16, background: COLORS.ink, color: COLORS.cream, overflow: "hidden" }}>
-        <div style={{ ...shell, paddingTop: isPhone ? 40 : LANDING_BAND_PAD_Y, paddingBottom: isPhone ? 40 : LANDING_BAND_PAD_Y, display: "grid", gridTemplateColumns: isCompact ? "1fr" : LANDING_VASE_SIZE + "px minmax(0, 1.05fr) minmax(0, 0.95fr)", gap: isCompact ? 32 : 48, alignItems: "center" }}>
-          {/* Cut off at exactly half, as in the mockup. alignSelf:end puts the
-              vessel's base on the row's bottom edge; dropping it by the band's
-              bottom padding brings it level with the band edge, and half its
-              own height again puts that edge through its middle. */}
+        <div style={{ ...shell, paddingTop: isPhone ? 40 : LANDING_BAND_PAD_Y, paddingBottom: isPhone ? 40 : LANDING_BAND_PAD_Y, display: "grid", gridTemplateColumns: isCompact ? "1fr" : LANDING_VASE_COL + "px minmax(0, 1.05fr) minmax(0, 0.95fr)", gap: isCompact ? 32 : 48, alignItems: "center" }}>
+          {/* The photograph, top-aligned with the "Early access" eyebrow and cut
+              off at exactly half by the band's bottom edge.
+
+              The cell stretches to the row height, so 200% + twice the band's
+              vertical padding is exactly twice the distance from the row's top
+              to the band's outer edge — meaning the half below that edge is
+              the half that gets clipped, at any row height. Absolute, so a
+              photo this tall can't stretch the band it's measuring itself
+              against. */}
           {!isCompact && (
-            <div aria-hidden="true" style={{ alignSelf: "end", marginBottom: -(LANDING_BAND_PAD_Y + LANDING_VASE_H / 2), lineHeight: 0 }}>
-              <ProjectIcon icon="roundBulb" color={LANDING_DARK_CARD.muted} size={LANDING_VASE_SIZE} />
+            <div style={{ position: "relative", alignSelf: "stretch" }}>
+              <img
+                src="assets/vase-cutout.jpg"
+                alt=""
+                aria-hidden="true"
+                style={{
+                  position: "absolute", top: 0, left: 0, display: "block",
+                  height: "calc(200% + " + LANDING_BAND_PAD_Y * 2 + "px)",
+                  width: "auto",
+                }}
+              />
             </div>
           )}
           <div style={{ minWidth: 0 }}>
