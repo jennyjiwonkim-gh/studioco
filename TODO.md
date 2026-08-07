@@ -1,4 +1,4 @@
-# StudioCo TODO
+# MOA Studio TODO
 
 Standing backlog — flat checklist, not tied to any one session. Check items
 off (or delete) as they land; add new ones as they come up. No narrative,

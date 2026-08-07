@@ -1,4 +1,4 @@
-# StudioCo PLAN
+# MOA Studio PLAN
 
 The single active initiative — not a backlog (see `TODO.md` for that) and
 not a session log (see `handoff.md` for that). Rewritten/replaced wholesale
@@ -6,7 +6,9 @@ when the active initiative changes, rather than accumulating.
 
 ## Active: Project landing page redesign (`ProjectDashboard`/`BoardScreen`)
 
-Reference: "StudioCo — Redesign Concept" Artifact
+Reference: the "StudioCo — Redesign Concept" Artifact (kept under its original
+title — that is what it is actually called on claude.ai, so renaming the
+reference here would make it unfindable)
 (`https://claude.ai/code/artifact/d7fec2a1-56ad-43f0-a03d-537a39b1ab78`),
 local copy at `.claude/worktrees/agile-mixing-cat/redesign-concept.html` —
 specifically its Project Detail page (built for "Moon jars," stage tracker +
