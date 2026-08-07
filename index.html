@@ -476,7 +476,7 @@ async function submitWaitlistEmail(email) {
     },
     body: JSON.stringify({ email }),
   });
-  if (!res.ok) throw new Error("Couldn't join the waitlist — try again.");
+  if (!res.ok) throw new Error("Couldn’t join the waitlist — try again.");
 }
 
 /* One fetch wrapper for every data call: attaches the token, and on a 401
@@ -7499,16 +7499,16 @@ function AuthShell({ children, maxWidth }) {
    fill. The bands alternate between the two existing surface tokens only, so
    this page introduces no color the palette doesn't already have. */
 const LANDING_SECTION_MARKS = [
-  { key: "boards", icon: "ti-stack-2", title: "Project boards",
-    desc: "Track every piece from first sketch to finished sale, without losing your place." },
-  { key: "schedule", icon: "ti-calendar-month", title: "Studio schedule",
-    desc: "Plan today's tasks and see the week ahead without leaving the bench." },
-  { key: "inventory", icon: "ti-box", title: "Inventory & listings",
-    desc: "Know what's finished, what's in progress, and what's ready to sell." },
-  { key: "marketing", icon: "ti-photo", title: "Content & marketing",
-    desc: "Draft captions and plan posts without juggling five different apps." },
-  { key: "sales", icon: "ti-chart-bar", title: "One studio, one place",
-    desc: "Ship finished work to your storefront, and watch the practice grow." },
+  { key: "hub", icon: "ti-stack-2", title: "Project Hub",
+    desc: "Organize all of your projects from idea to finished piece." },
+  { key: "schedule", icon: "ti-calendar-month", title: "Studio Schedule",
+    desc: "See today’s tasks and plan ahead without leaving the bench." },
+  { key: "marketing", icon: "ti-photo", title: "Content & Marketing",
+    desc: "Plan, schedule, and track content that showcases your work and grows your audience." },
+  { key: "inventory", icon: "ti-box", title: "Inventory & Sales",
+    desc: "Know what’s finished, what’s in progress, and what’s ready to sell." },
+  { key: "analytics", icon: "ti-chart-bar", title: "Analytics",
+    desc: "Understand what’s working and make smarter creative decisions." },
 ];
 
 /* The waitlist CTA is deliberately a dark card sitting on a light page, so it
@@ -7549,7 +7549,7 @@ function WaitlistForm({ dark, stack }) {
   if (done) {
     return (
       <div style={{ fontSize: 15, fontWeight: 700, color: dark ? COLORS.lemon : COLORS.royalBlue }}>
-        You're on the list — we'll be in touch.
+        You’re on the list — we’ll be in touch.
       </div>
     );
   }
@@ -7756,12 +7756,6 @@ function LandingScreen({ onLogIn }) {
       <div style={{ ...shell, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: (isPhone ? "18px " : "26px ") + pad + "px" }}>
         <LandingWordmark />
         <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 18 : 30 }}>
-          {!isCompact && (
-            <React.Fragment>
-              <button onClick={() => jump("features")} style={navLink}>Features</button>
-              <button onClick={() => jump("preview")} style={navLink}>Preview</button>
-            </React.Fragment>
-          )}
           <button onClick={onLogIn} style={navLink}>Log in</button>
           {!isPhone && (
             <button onClick={() => jump("waitlist")} style={{ background: COLORS.ink, color: COLORS.cream, border: "none", borderRadius: RADIUS, padding: "13px 22px", fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -7775,21 +7769,13 @@ function LandingScreen({ onLogIn }) {
       <div style={{ ...shell, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : 56, alignItems: "center" }}>
         <div style={{ minWidth: 0 }}>
           <h1 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 46 : 68, margin: "0 0 24px" }}>
-            The quiet half of a making practice.
+            The creative workspace you’ve been waiting for.
           </h1>
           <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 28px", maxWidth: 440 }}>
-            A private studio workspace for people who make things by hand. Track a
-            piece from first sketch through glaze, filming, listing and sale — one
-            place, no spreadsheets.
+            Plan your projects. Track every detail. Create content that connects.
+            All in one beautiful, intuitive space.
           </p>
           <WaitlistForm />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 18px", marginTop: 20, fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted }}>
-            <span>Every stage</span>
-            <span aria-hidden="true">·</span>
-            <span>Every device</span>
-            <span aria-hidden="true">·</span>
-            <span>Private by default</span>
-          </div>
         </div>
         <div id="preview" style={{ minWidth: 0, scrollMarginTop: 20 }}>
           <LandingHomeMock compact={isCompact} />
@@ -7801,35 +7787,25 @@ function LandingScreen({ onLogIn }) {
         <div style={{ ...shell, paddingTop: isPhone ? 48 : 76, paddingBottom: isPhone ? 40 : 64 }}>
           <div style={LANDING_EYEBROW}>Built for artists</div>
           <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 44, margin: "14px 0 0" }}>
-            Everything in its place.
+            One studio, one place.
           </h2>
+          <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "12px 0 0" }}>
+            A private workspace for artists.
+          </p>
           <LandingRule />
 
           {/* Five across only on real desktop. At tablet widths five columns
               leave ~165px each and the titles start wrapping mid-phrase, so the
-              strip steps down to 3, then 2 on phone. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(" + landingCols + ", minmax(0, 1fr))", columnGap: 0, rowGap: isPhone ? 30 : 40, marginTop: isPhone ? 34 : 52 }}>
-            {LANDING_SECTION_MARKS.map((f, i) => {
-              const firstInRow = i % landingCols === 0;
-              return (
-                <div
-                  key={f.key}
-                  style={{
-                    // Hairline rules between columns, as in the reference —
-                    // driven by position in the row, not raw index, so they
-                    // stay correct at every column count.
-                    padding: isPhone ? "0 14px" : "0 26px",
-                    paddingLeft: firstInRow ? 0 : undefined,
-                    borderLeft: firstInRow ? "none" : "1px solid " + COLORS.hairline,
-                    minWidth: 0,
-                  }}
-                >
-                  <i className={"ti " + f.icon} style={{ fontSize: 26, display: "block", marginBottom: 16 }} aria-hidden="true" />
-                  <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{f.title}</div>
-                  <div style={{ fontSize: 12.5, lineHeight: 1.55, color: COLORS.muted }}>{f.desc}</div>
-                </div>
-              );
-            })}
+              strip steps down to 3, then 2 on phone. No dividers, per Jenny —
+              a real column gap carries the separation instead. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(" + landingCols + ", minmax(0, 1fr))", columnGap: isPhone ? 22 : 40, rowGap: isPhone ? 30 : 40, marginTop: isPhone ? 34 : 52 }}>
+            {LANDING_SECTION_MARKS.map((f) => (
+              <div key={f.key} style={{ minWidth: 0 }}>
+                <i className={"ti " + f.icon} style={{ fontSize: 26, display: "block", marginBottom: 16 }} aria-hidden="true" />
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.55, color: COLORS.muted }}>{f.desc}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -7839,15 +7815,14 @@ function LandingScreen({ onLogIn }) {
       <div style={{ borderTop: "1px solid " + COLORS.hairline, background: COLORS.paper }}>
         <div style={{ ...shell, paddingTop: isPhone ? 48 : 80, paddingBottom: isPhone ? 48 : 80, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.8fr) minmax(0, 1.2fr)", gap: isCompact ? 40 : 56, alignItems: "center" }}>
           <div style={{ minWidth: 0 }}>
-            <div style={LANDING_EYEBROW}>For working artists</div>
+            <div style={LANDING_EYEBROW}>Designed to disappear</div>
             <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 46, margin: "14px 0 20px" }}>
-              Your whole studio, in one place.
+              More time creating, less time managing.
             </h2>
             <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: 0, maxWidth: 440 }}>
-              Seamlessly track every project from inspiration to sale, without the
-              spreadsheets. An intuitive, end-to-end record system built for makers
-              of every kind, so you can spend less time managing and more time
-              creating.
+              Seamlessly track every project from inspiration to sale. An intuitive,
+              end-to-end record system built for makers of every kind, so you can
+              focus on your craft, not your tools.
             </p>
             <button onClick={() => jump("waitlist")} style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 10, background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}>
               Join the waitlist
@@ -7881,14 +7856,14 @@ function LandingScreen({ onLogIn }) {
           </div>
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 14.5, lineHeight: 1.6, color: LANDING_DARK_CARD.muted, margin: "0 0 20px", maxWidth: 420 }}>
-              StudioCo is opening up slowly — we're onboarding artists in small
-              batches while we build out the rest. Leave your email and we'll
+              StudioCo is opening up slowly — we’re onboarding artists in small
+              batches while we build out the rest. Leave your email and we’ll
               reach out.
             </p>
             <WaitlistForm dark stack />
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 11.5, color: LANDING_DARK_CARD.muted }}>
               <i className="ti ti-lock" style={{ fontSize: 13 }} aria-hidden="true" />
-              We'll never spam you. Unsubscribe anytime.
+              We’ll never spam you. Unsubscribe anytime.
             </div>
           </div>
         </div>
