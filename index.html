@@ -7700,7 +7700,9 @@ function LandingHomeMock({ compact }) {
               pretending to be the real scheduler. */}
           <div style={{ minWidth: 0 }}>
             <div style={label}>This week</div>
-            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
+            {/* Padding on the box so the rules stop short of its border rather
+                than running into it. */}
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, padding: "8px 10px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "26px repeat(5, minmax(0, 1fr))", borderBottom: "1px solid " + COLORS.hairline }}>
                 <div />
                 {[["M", 3], ["T", 4], ["W", 5], ["T", 6], ["F", 7]].map(([d, n], i) => (
