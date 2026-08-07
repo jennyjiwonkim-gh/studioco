@@ -1,4 +1,4 @@
-# StudioCo PLAN
+# MOA Studio PLAN
 
 The single active initiative — not a backlog (see `TODO.md` for that) and
 not a session log (see `handoff.md` for that). Rewritten/replaced wholesale

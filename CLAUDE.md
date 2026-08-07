@@ -5,6 +5,20 @@ A private studio-management app for ceramic artists, built and used by Jenny
 Babel, no build step. Deployed as `index.html` at the repo root; Netlify
 auto-deploys on every push to `main`.
 
+**Renamed from "StudioCo" on 2026-08-07.** The product name changed; a set of
+identifiers deliberately did not, and must not be "tidied up" later:
+
+- the `studioco:` localStorage keys (`AUTH_KEYS`, `STORAGE_PREFIX`) — renaming
+  them signs the user out and orphans every cached value.
+- `studioco-app.netlify.app` and the GitHub repo — real infrastructure names.
+- the `StudioCo Landing/` folder and `StudioCo Landing.dc.html` — real paths
+  on disk.
+- the "StudioCo — Redesign Concept" Artifact, which is its actual title.
+
+Everything user-facing was capital-S `StudioCo` and every identifier is
+lowercase `studioco`, so a **case-sensitive** replace separates the two
+cleanly. Never run a case-insensitive one.
+
 A second, separate site — **StoreCo** — is the public-facing sales/archive
 window. MOA Studio is the private workshop and the source of truth; StoreCo is fed
 by it. Do not merge them.

@@ -7574,7 +7574,7 @@ function AuthShell({ children, maxWidth }) {
 }
 
 /* ---------- Landing page ----------
-   Public face of StudioCo, and the only screen a signed-out visitor sees.
+   Public face of MOA Studio, and the only screen a signed-out visitor sees.
    Built in the app's own language — Inter, 3px radius, cream paper, the five
    accent hues, vessel silhouettes for every icon — rather than a separate
    marketing style, so signing in doesn't feel like a different product.
@@ -7689,7 +7689,7 @@ function LandingWordmark({ size }) {
       <div style={{ width: box, height: box, background: COLORS.ink, borderRadius: RADIUS, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <ProjectIcon icon="urn" color={COLORS.lemon} size={Math.round(box * 0.56)} />
       </div>
-      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>StudioCo</span>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>MOA Studio</span>
     </div>
   );
 }
@@ -8061,7 +8061,7 @@ function LandingScreen({ onLogIn }) {
               Be the first to build with us.
             </h2>
             <p style={{ fontSize: 14.5, lineHeight: 1.6, color: LANDING_DARK_CARD.muted, margin: 0, maxWidth: 400 }}>
-              StudioCo is opening up slowly — we’re onboarding artists in small
+              MOA Studio is opening up slowly — we’re onboarding artists in small
               batches while we build out the rest. Leave your email and we’ll
               reach out.
             </p>
@@ -8079,7 +8079,7 @@ function LandingScreen({ onLogIn }) {
           <a href="https://instagram.com/offline_jenny" target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none", color: COLORS.muted }}>Instagram</a>
           <button onClick={onLogIn} style={{ ...navLink, color: COLORS.muted }}>Log in</button>
         </div>
-        <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 StudioCo</div>
+        <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 MOA Studio</div>
       </div>
 
     </div>
@@ -8170,7 +8170,7 @@ function App() {
 
   if (session) return <StudioApp onSignOut={() => { Auth.signOut(); }} email={session.email} />;
 
-  // Sign-up is deliberately unlinked while StudioCo is waitlist-only — the
+  // Sign-up is deliberately unlinked while MOA Studio is waitlist-only — the
   // landing page offers "Join the waitlist" instead. AuthScreen still supports
   // mode="signup" untouched, so restoring it is a one-line change.
   if (view === "landing") {

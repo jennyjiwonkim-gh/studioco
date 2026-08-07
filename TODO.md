@@ -16,4 +16,4 @@ no dates — that belongs in `handoff.md`.
       list grows, add an in-app view for it (needs an authed read path — the
       table is deliberately INSERT-only for `anon`).
 - [ ] Landing page footer's Instagram link points at `@offline_jenny`; swap it
-      for a StudioCo account if one gets made.
+      for a MOA Studio account if one gets made.
