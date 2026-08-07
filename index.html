@@ -825,7 +825,6 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   const goStudio = () => setScreen({ name: "studio" });
   const goProject = (projectId) => setScreen({ name: "projectDashboard", projectId });
   const goBoard = (projectId, boardKey) => setScreen({ name: "board", projectId, boardKey });
-  const goProduct = (projectId) => setScreen({ name: "product", projectId });
   const goStudioTab = (tabKey) => { setStudioTab(tabKey); setScreen({ name: "studio" }); };
   // Home is just the first Studio tab now, so "going home" is the same
   // action as switching to any other tab — no separate screen state needed.
@@ -834,7 +833,7 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   // list, regardless of which tab (Overview or a board) it's clicked from.
   const goProjectList = () => goStudioTab("project");
 
-  const activeProject = (screen.name === "projectDashboard" || screen.name === "board" || screen.name === "product") ? projects.find((p) => p.id === screen.projectId) : null;
+  const activeProject = (screen.name === "projectDashboard" || screen.name === "board") ? projects.find((p) => p.id === screen.projectId) : null;
 
   // Project Dashboard and every board page belong to the same project, so
   // they always anchor bottom-right with that project's own icon and color.
@@ -908,23 +907,11 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
           projects={projects}
           setProjects={setProjects}
           tasks={tasks}
+          boardContent={boardContent}
+          setBoardContent={setBoardContent}
           onBack={goProjectList}
           onOpenBoard={goBoard}
           onSwitchProject={goProject}
-          onOpenProduct={goProduct}
-        />
-      )}
-      {screen.name === "product" && (
-        <ProductPage
-          project={projects.find((p) => p.id === screen.projectId)}
-          content={normalizeProduct(boardContent[screen.projectId + ":product"])}
-          setContent={(updater) => setBoardContent((prev) => {
-            const key = screen.projectId + ":product";
-            const current = normalizeProduct(prev[key]);
-            const next = typeof updater === "function" ? updater(current) : updater;
-            return { ...prev, [key]: next };
-          })}
-          onBack={() => goProject(screen.projectId)}
         />
       )}
       {screen.name === "board" && (
@@ -937,7 +924,7 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
           onGoOverview={() => goProject(screen.projectId)}
           onSwitchProject={(pid) => goBoard(pid, screen.boardKey)}
           onSwitchBoard={(boardKey) => goBoard(screen.projectId, boardKey)}
-          onOpenProduct={goProduct}
+          onOpenProduct={goProject}
           boardContent={boardContent}
           setBoardContent={setBoardContent}
           tasks={tasks}
@@ -4106,7 +4093,8 @@ const BOARD_STAGES = [
 // folded into BOARD_STAGES itself.
 const PROJECT_TABS = [{ key: "overview", label: "Overview" }, ...BOARD_STAGES];
 
-// ---- Product page (per-project final listing spec sheet) ----
+// ---- Product record (final listing spec sheet, shown in Overview's Details
+// panel — see ProjectDetailsPanel) ----
 // Field names deliberately mirror StoreCo's PIECES model (title/price/
 // description/materials/dimensions) so this record can feed StoreCo, and
 // eventually a real Shopify product, without renaming anything.
@@ -4327,7 +4315,346 @@ function ProjectScreenHeader({ project, projects, setProjects, activeTab, onBack
   );
 }
 
-function ProjectDashboard({ project, projects, setProjects, tasks, onBack, onOpenBoard, onSwitchProject, onOpenProduct }) {
+// A single non-empty row in the Details panel's read ("completed") view —
+// mirrors the reference mockup's key/value rows. Renders nothing for an
+// empty value so an unfilled optional field doesn't pad the summary with
+// dashes once the panel has enough content to switch out of edit mode.
+function DetailRow({ label, value, children }) {
+  if (!value && !children) return null;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${COLORS.hairline}`, fontSize: 12.5 }}>
+      <span style={{ color: COLORS.muted, flexShrink: 0 }}>{label}</span>
+      {children || <span style={{ fontWeight: 600, textAlign: "right" }}>{value}</span>}
+    </div>
+  );
+}
+
+function hasProductDetails(content) {
+  return !!(content.name || content.price || content.dimensions || content.materials || content.description || content.colors.length || content.careTags.length);
+}
+
+// The final-listing spec sheet (name, price, dimensions, care, inventory…),
+// inline on the Overview tab rather than a separate click-in page. Starts in
+// its compact read view once real details exist; a bare/new project starts
+// in edit mode directly, since there's nothing yet to summarize.
+function ProjectDetailsPanel({ content, setContent, accentHex, projectId }) {
+  const [editing, setEditing] = useState(() => !hasProductDetails(content));
+
+  const update = (field, value) => setContent((prev) => ({ ...prev, [field]: value }));
+  const toggleCareTag = (tag) => {
+    setContent((prev) => ({
+      ...prev,
+      careTags: prev.careTags.includes(tag) ? prev.careTags.filter((t) => t !== tag) : [...prev.careTags, tag],
+    }));
+  };
+  const addColor = () => {
+    setContent((prev) => ({
+      ...prev,
+      colors: [...prev.colors, { id: "color-" + Date.now(), hex: PROJECT_ACCENTS[0].hex, label: "" }],
+    }));
+  };
+  const updateColor = (id, field, value) => {
+    setContent((prev) => ({ ...prev, colors: prev.colors.map((c) => (c.id === id ? { ...c, [field]: value } : c)) }));
+  };
+  const removeColor = (id) => setContent((prev) => ({ ...prev, colors: prev.colors.filter((c) => c.id !== id) }));
+
+  const fieldStyle = {
+    background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS,
+    padding: "8px 10px", fontSize: 13, fontFamily: "inherit", color: COLORS.ink, width: "100%",
+  };
+  const labelStyle = { fontSize: 10, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 };
+  const ghostBtnStyle = { background: "none", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "4px 11px", fontSize: 11, fontWeight: 600, fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" };
+
+  const statusLabel = (PRODUCT_STATUS_OPTIONS.find((s) => s.value === content.status) || {}).label || content.status;
+  const soldCount = content.units.filter((u) => u.sold).length;
+  const inventorySummary = content.isBatch ? `${soldCount} of ${content.units.length} sold` : (content.units[0] && content.units[0].sold ? "Sold" : "Available");
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <SectionLabel>Details</SectionLabel>
+        <button onClick={() => setEditing((e) => !e)} style={ghostBtnStyle}>{editing ? "Done" : "Edit"}</button>
+      </div>
+
+      {editing ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <div style={labelStyle}>Listing name</div>
+            <input value={content.name} onChange={(e) => update("name", e.target.value)} placeholder="Defaults to project name" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Status</div>
+            <select value={content.status} onChange={(e) => update("status", e.target.value)} style={{ ...fieldStyle, cursor: "pointer" }}>
+              {PRODUCT_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={labelStyle}>Price</div>
+            <input type="number" min="0" step="0.01" value={content.price} onChange={(e) => update("price", e.target.value)} placeholder="0.00" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Dimensions</div>
+            <input value={content.dimensions} onChange={(e) => update("dimensions", e.target.value)} placeholder={'e.g. 6" tall x 4" wide'} style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Item weight</div>
+            <input value={content.itemWeight} onChange={(e) => update("itemWeight", e.target.value)} placeholder="e.g. 1.2 lb" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Packaged / shipping weight</div>
+            <input value={content.shippingWeight} onChange={(e) => update("shippingWeight", e.target.value)} placeholder="e.g. 2.5 lb" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Materials</div>
+            <input value={content.materials} onChange={(e) => update("materials", e.target.value)} placeholder="e.g. Stoneware, celadon glaze" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>SKU</div>
+            <input value={content.sku} onChange={(e) => update("sku", e.target.value)} placeholder={projectId} style={fieldStyle} />
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={labelStyle}>Color</div>
+              <button onClick={addColor} style={ghostBtnStyle}>+ Add color</button>
+            </div>
+            {content.colors.length === 0 && <div style={{ fontSize: 11.5, color: COLORS.muted, fontStyle: "italic" }}>No colors added yet.</div>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {content.colors.map((c) => (
+                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <ColorPickerPopover value={c.hex} onChange={(hex) => updateColor(c.id, "hex", hex)} />
+                  <input value={c.label} onChange={(e) => updateColor(c.id, "label", e.target.value)} placeholder="e.g. Celadon green" style={{ ...fieldStyle, flex: 1 }} />
+                  <button onClick={() => removeColor(c.id)} title="Remove color" style={{ background: "none", border: "none", color: COLORS.muted, cursor: "pointer", fontSize: 15, padding: 4 }}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={labelStyle}>Care & safety</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 6 }}>
+              {CARE_TAG_OPTIONS.map((tag) => {
+                const active = content.careTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => toggleCareTag(tag)}
+                    style={{
+                      fontFamily: "inherit", fontSize: 11, fontWeight: 600, padding: "5px 10px", borderRadius: RADIUS, cursor: "pointer",
+                      background: active ? COLORS.ink : "none", color: active ? COLORS.paper : COLORS.muted,
+                      border: `1px solid ${active ? COLORS.ink : COLORS.hairline}`,
+                    }}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div style={labelStyle}>Listing description</div>
+            <textarea value={content.description} onChange={(e) => update("description", e.target.value)} placeholder="A sentence or two about this piece…" style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
+          </div>
+          <div>
+            <div style={labelStyle}>Other notes</div>
+            <textarea value={content.notes} onChange={(e) => update("notes", e.target.value)} placeholder="Care quirks, fragility, one-of-a-kind variation…" style={{ ...fieldStyle, minHeight: 50, resize: "vertical" }} />
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={labelStyle}>Inventory</div>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={content.isBatch}
+                  onChange={(e) => {
+                    const isBatch = e.target.checked;
+                    setContent((prev) => {
+                      const size = isBatch ? Math.max(2, prev.batchSize) : 1;
+                      return { ...prev, isBatch, batchSize: size, units: resizeUnits(prev.units, size) };
+                    });
+                  }}
+                  style={{ width: 13, height: 13, cursor: "pointer" }}
+                />
+                Batch
+              </label>
+            </div>
+            {content.isBatch && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ fontSize: 11.5, color: COLORS.muted }}>How many made</div>
+                <input
+                  type="number" min="1" value={content.batchSize}
+                  onChange={(e) => {
+                    const size = Math.max(1, parseInt(e.target.value, 10) || 1);
+                    setContent((prev) => ({ ...prev, batchSize: size, units: resizeUnits(prev.units, size) }));
+                  }}
+                  style={{ ...fieldStyle, width: 60 }}
+                />
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {content.units.map((u, i) => (
+                <UnitRow
+                  key={u.id}
+                  label={content.isBatch ? `Unit ${i + 1}` : "This piece"}
+                  unit={u}
+                  accentHex={accentHex}
+                  fieldStyle={fieldStyle}
+                  onToggle={() => setContent((prev) => ({
+                    ...prev,
+                    units: prev.units.map((x) => (x.id !== u.id ? x : (x.sold ? { ...x, sold: false, soldDate: null } : { ...x, sold: true, soldDate: x.soldDate || appToday().toISOString().slice(0, 10) }))),
+                  }))}
+                  onDateChange={(value) => setContent((prev) => ({ ...prev, units: prev.units.map((x) => (x.id === u.id ? { ...x, soldDate: value } : x)) }))}
+                />
+              ))}
+            </div>
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={content.includeOnStoreCo} onChange={(e) => update("includeOnStoreCo", e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer" }} />
+            Include on public storefront when connected
+          </label>
+        </div>
+      ) : (
+        <div>
+          <DetailRow label="Status" value={statusLabel} />
+          <DetailRow label="Listing name" value={content.name} />
+          <DetailRow label="Price" value={content.price ? `$${content.price}` : null} />
+          <DetailRow label="Dimensions" value={content.dimensions} />
+          <DetailRow label="Item weight" value={content.itemWeight} />
+          <DetailRow label="Shipping weight" value={content.shippingWeight} />
+          <DetailRow label="Materials" value={content.materials} />
+          <DetailRow label="SKU" value={content.sku} />
+          {content.colors.length > 0 && (
+            <DetailRow label="Color">
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {content.colors.map((c) => (
+                  <span key={c.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.hex, border: `1px solid ${COLORS.hairline}`, flexShrink: 0 }} />
+                    <span style={{ fontWeight: 600 }}>{c.label || "—"}</span>
+                  </span>
+                ))}
+              </div>
+            </DetailRow>
+          )}
+          {content.careTags.length > 0 && (
+            <DetailRow label="Care & safety">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {content.careTags.map((tag) => (
+                  <span key={tag} style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: RADIUS, border: `1px solid ${COLORS.hairline}`, color: COLORS.muted }}>{tag}</span>
+                ))}
+              </div>
+            </DetailRow>
+          )}
+          <DetailRow label="Description" value={content.description} />
+          <DetailRow label="Notes" value={content.notes} />
+          <DetailRow label="Inventory" value={inventorySummary} />
+          <DetailRow label="StoreCo" value={content.includeOnStoreCo ? "Included" : "Not included"} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The reference mockup's photo grid, in place of the old primary-photo-plus-
+// filmstrip layout — same upload/remove/set-primary behavior underneath.
+function ProjectGallery({ projectId, content, setContent }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = React.useRef(null);
+
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") || isHeicFile(f));
+    if (files.length === 0) return;
+    if (!storeUserId) {
+      setUploadError("Photo upload needs an active session — try refreshing the page.");
+      return;
+    }
+    setUploading(true);
+    setUploadError("");
+    const results = await Promise.allSettled(files.map(async (file, i) => {
+      const blob = await resizeImageFile(file, 1000);
+      const id = "photo-" + Date.now() + "-" + i + "-" + Math.random().toString(36).slice(2, 7);
+      const path = storeUserId + "/" + projectId + "/" + id + ".jpg";
+      const url = await uploadPhotoToStorage(blob, path);
+      return { id, url, path };
+    }));
+    const newPhotos = [];
+    const failed = [];
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") newPhotos.push(r.value);
+      else {
+        console.warn("StudioCo: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
+        failed.push(files[i].name);
+      }
+    });
+    if (newPhotos.length) {
+      setContent((prev) => ({ ...prev, photos: [...prev.photos, ...newPhotos], primaryPhotoId: prev.primaryPhotoId || newPhotos[0].id }));
+    }
+    if (failed.length) setUploadError(`Couldn't read ${failed.join(", ")} — try exporting as JPEG or PNG and uploading again.`);
+    setUploading(false);
+  };
+
+  const removePhoto = (id) => {
+    const removed = content.photos.find((p) => p.id === id);
+    setContent((prev) => {
+      const photos = prev.photos.filter((p) => p.id !== id);
+      const primaryPhotoId = prev.primaryPhotoId === id ? (photos[0] ? photos[0].id : null) : prev.primaryPhotoId;
+      return { ...prev, photos, primaryPhotoId };
+    });
+    if (removed && removed.path) deletePhotoFromStorage(removed.path);
+  };
+
+  return (
+    <div>
+      <SectionLabel>Gallery</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 10 }}>
+        {content.photos.map((p) => (
+          <div key={p.id} style={{ position: "relative", aspectRatio: "1 / 1" }}>
+            <img
+              src={p.url}
+              alt="Project photo"
+              onClick={() => setContent((prev) => ({ ...prev, primaryPhotoId: p.id }))}
+              title={p.id === content.primaryPhotoId ? "Primary photo" : "Click to set as primary"}
+              style={{
+                width: "100%", height: "100%", objectFit: "cover", borderRadius: RADIUS, cursor: "pointer", display: "block",
+                border: p.id === content.primaryPhotoId ? `2px solid ${COLORS.ink}` : `1px solid ${COLORS.hairline}`,
+              }}
+            />
+            <button
+              onClick={() => removePhoto(p.id)}
+              title="Remove photo"
+              style={{
+                position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
+                background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.paper}`,
+                fontSize: 11, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          onClick={() => fileInputRef.current && fileInputRef.current.click()}
+          disabled={uploading}
+          style={{
+            aspectRatio: "1 / 1", borderRadius: RADIUS, border: `1px dashed ${COLORS.hairline}`,
+            background: "none", color: COLORS.muted, cursor: uploading ? "default" : "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, fontFamily: "inherit",
+          }}
+        >
+          <span style={{ fontSize: 20, lineHeight: 1 }}>{uploading ? "…" : "+"}</span>
+          {!uploading && <span style={{ fontSize: 10.5, fontWeight: 600 }}>Add photo</span>}
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*,.heic,.heif" multiple onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+      </div>
+      {uploadError && <div style={{ fontSize: 11.5, color: COLORS.tomato, marginTop: 8 }}>{uploadError}</div>}
+    </div>
+  );
+}
+
+function ProjectDashboard({ project, projects, setProjects, tasks, boardContent, setBoardContent, onBack, onOpenBoard, onSwitchProject }) {
   const viewport = useViewport();
   const [editingPriority, setEditingPriority] = useState(false);
   if (!project) return null;
@@ -4358,6 +4685,14 @@ function ProjectDashboard({ project, projects, setProjects, tasks, onBack, onOpe
 
   const status = totalCount === 0 ? "Not Started" : completedCount === totalCount ? "Completed" : completedCount > 0 ? "In Progress" : "Not Started";
 
+  const productKey = project.id + ":product";
+  const productContent = normalizeProduct(boardContent[productKey]);
+  const setProductContent = (updater) => setBoardContent((prev) => {
+    const current = normalizeProduct(prev[productKey]);
+    const next = typeof updater === "function" ? updater(current) : updater;
+    return { ...prev, [productKey]: next };
+  });
+
   return (
     <div style={{ padding: viewport.isPhone ? "22px 16px 48px" : viewport.isTablet ? "28px 22px 56px" : "32px 32px 64px" }}>
       <ProjectScreenHeader
@@ -4383,30 +4718,13 @@ function ProjectDashboard({ project, projects, setProjects, tasks, onBack, onOpe
           shell changing shape — only the content inside the card differs. */}
       <div style={{ borderTop: `3px solid ${a.hex}`, background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden" }}>
         <div style={{ padding: "24px 28px" }}>
-          {/* Product Details — the final-listing spec sheet, separate from the 8
-              pipeline boards since it isn't a stage, it's a persistent record. */}
-          <div
-            onClick={() => onOpenProduct(project.id)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-              background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderLeft: `4px solid ${a.hex}`,
-              borderRadius: RADIUS, padding: "14px 18px", marginBottom: 24, cursor: "pointer",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Product details</div>
-              <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 2 }}>
-                Final specs for selling this piece — photos, dimensions, price, care notes
-              </div>
-            </div>
-            <span style={{ fontSize: 18, color: COLORS.muted }}>→</span>
-          </div>
-
           {/* Metrics row */}
           <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 1, background: COLORS.hairline, border: `1px solid ${COLORS.hairline}`, marginBottom: 28 }}>
             <MetricCell
-              label="Completed progress"
+              label="Progress"
               value={`${pct}%`}
+              barPct={pct}
+              barColor={a.hex}
               sub={`${craftCompleted} of ${craftTasks.length} craft tasks  |  ${contentCompleted} of ${contentTasks.length} content tasks`}
             />
             <MetricCell label="Target post date" value={meta.targetPostDate ? fmtDate(meta.targetPostDate) : "—"} sub={meta.targetPostDate ? null : "Not set"} />
@@ -4441,32 +4759,12 @@ function ProjectDashboard({ project, projects, setProjects, tasks, onBack, onOpe
             <MetricCell label="Est. materials" value={meta.budget ? `$${meta.budget}` : "—"} />
           </div>
 
-          {/* Two-column: boards nav + this week / upcoming */}
-          <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1.3fr 1fr", gap: 24, alignItems: "start" }}>
-            <div>
-              <SectionLabel>Boards</SectionLabel>
-              <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "repeat(2, 1fr)", gap: 8, marginTop: 10 }}>
-                {BOARD_STAGES.map((b, i) => (
-                  <div
-                    key={b.key}
-                    onClick={() => onOpenBoard(project.id, b.key)}
-                    style={{
-                      background: COLORS.cream,
-                      border: `1px solid ${COLORS.hairline}`,
-                      borderRadius: RADIUS,
-                      padding: "13px 14px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <span style={{ fontSize: 10.5, color: COLORS.royalBlue, fontWeight: 700, minWidth: 16 }}>{String(i + 1).padStart(2, "0")}</span>
-                    <span style={{ fontSize: 13, fontWeight: 500 }}>{b.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Three-column: details, gallery, this week / upcoming — the
+              numbered "Boards" grid that used to live here is gone now that
+              the tab strip in the header covers that navigation. */}
+          <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1.15fr 0.85fr", gap: 28, alignItems: "start" }}>
+            <ProjectDetailsPanel content={productContent} setContent={setProductContent} accentHex={a.hex} projectId={project.id} />
+            <ProjectGallery projectId={project.id} content={productContent} setContent={setProductContent} />
 
             <div>
               <SectionLabel>This week</SectionLabel>
@@ -4484,11 +4782,16 @@ function ProjectDashboard({ project, projects, setProjects, tasks, onBack, onOpe
   );
 }
 
-function MetricCell({ label, value, sub }) {
+function MetricCell({ label, value, sub, barPct, barColor }) {
   return (
     <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
       <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 19, fontWeight: 700, color: COLORS.tomato }}>{value}</div>
+      {barPct != null && (
+        <div style={{ height: 5, background: COLORS.hairline, borderRadius: 3, overflow: "hidden", marginTop: 8 }}>
+          <div style={{ width: `${barPct}%`, height: "100%", background: barColor || COLORS.cobalt, borderRadius: 3 }} />
+        </div>
+      )}
       {sub && <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 3 }}>{sub}</div>}
     </div>
   );
@@ -4596,396 +4899,10 @@ async function deletePhotoFromStorage(path) {
   }
 }
 
-function ProductPage({ project, content, setContent, onBack }) {
-  const viewport = useViewport();
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const fileInputRef = React.useRef(null);
-  if (!project) return null;
-  const a = PROJECT_ACCENTS[project.accentIdx];
-  const displayName = content.name || project.name;
-
-  const update = (field, value) => setContent((prev) => ({ ...prev, [field]: value }));
-
-  const handleFiles = async (fileList) => {
-    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") || isHeicFile(f));
-    if (files.length === 0) return;
-    if (!storeUserId) {
-      setUploadError("Photo upload needs an active session — try refreshing the page.");
-      return;
-    }
-    setUploading(true);
-    setUploadError("");
-    // Each file processed independently so one bad photo doesn't lose the
-    // rest of the batch — whatever succeeds gets saved, failures are reported.
-    const results = await Promise.allSettled(files.map(async (file, i) => {
-      const blob = await resizeImageFile(file, 1000);
-      const id = "photo-" + Date.now() + "-" + i + "-" + Math.random().toString(36).slice(2, 7);
-      const path = storeUserId + "/" + project.id + "/" + id + ".jpg";
-      const url = await uploadPhotoToStorage(blob, path);
-      return { id, url, path };
-    }));
-    const newPhotos = [];
-    const failed = [];
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        newPhotos.push(r.value);
-      } else {
-        console.warn("StudioCo: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
-        failed.push(files[i].name);
-      }
-    });
-    if (newPhotos.length) {
-      setContent((prev) => ({
-        ...prev,
-        photos: [...prev.photos, ...newPhotos],
-        primaryPhotoId: prev.primaryPhotoId || newPhotos[0].id,
-      }));
-    }
-    if (failed.length) {
-      setUploadError(`Couldn't read ${failed.join(", ")} — try exporting as JPEG or PNG and uploading again.`);
-    }
-    setUploading(false);
-  };
-
-  const removePhoto = (id) => {
-    const removed = content.photos.find((p) => p.id === id);
-    setContent((prev) => {
-      const photos = prev.photos.filter((p) => p.id !== id);
-      const primaryPhotoId = prev.primaryPhotoId === id ? (photos[0] ? photos[0].id : null) : prev.primaryPhotoId;
-      return { ...prev, photos, primaryPhotoId };
-    });
-    if (removed && removed.path) deletePhotoFromStorage(removed.path);
-  };
-
-  const toggleCareTag = (tag) => {
-    setContent((prev) => ({
-      ...prev,
-      careTags: prev.careTags.includes(tag) ? prev.careTags.filter((t) => t !== tag) : [...prev.careTags, tag],
-    }));
-  };
-
-  const addColor = () => {
-    setContent((prev) => ({
-      ...prev,
-      colors: [...prev.colors, { id: "color-" + Date.now(), hex: PROJECT_ACCENTS[0].hex, label: "" }],
-    }));
-  };
-  const updateColor = (id, field, value) => {
-    setContent((prev) => ({
-      ...prev,
-      colors: prev.colors.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
-    }));
-  };
-  const removeColor = (id) => setContent((prev) => ({ ...prev, colors: prev.colors.filter((c) => c.id !== id) }));
-
-  const fieldStyle = {
-    background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS,
-    padding: "8px 10px", fontSize: 13, fontFamily: "inherit", color: COLORS.ink, width: "100%",
-  };
-  const labelStyle = { fontSize: 10, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 };
-  const sectionStyle = { background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 18, marginBottom: 16 };
-
-  const primaryPhoto = content.photos.find((p) => p.id === content.primaryPhotoId) || content.photos[0];
-
-  return (
-    <div style={{ padding: viewport.isPhone ? "20px 16px 48px" : viewport.isTablet ? "24px 22px 56px" : "28px 32px 64px", maxWidth: 920 }}>
-      <div style={{ borderLeft: `4px solid ${a.hex}`, paddingLeft: 18, marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 21, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <ProjectIcon icon={project.icon} color={a.hex} size={22} />
-            Product details
-          </h1>
-          <div style={{ fontSize: 12.5, color: COLORS.muted, marginTop: 4 }}>{project.name}</div>
-        </div>
-        <button
-          onClick={onBack}
-          style={{ background: "none", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "7px 14px", fontSize: 12, fontWeight: 600, fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}
-        >
-          ← Back to project
-        </button>
-      </div>
-
-      {/* Photos */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Photos</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
-          {primaryPhoto && (
-            <div style={{ width: 160, height: 160, borderRadius: RADIUS, overflow: "hidden", border: `1px solid ${COLORS.hairline}`, flexShrink: 0 }}>
-              <img src={primaryPhoto.url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            </div>
-          )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignContent: "flex-start", flex: 1, minWidth: 200 }}>
-            {content.photos.map((p) => (
-              <div key={p.id} style={{ position: "relative", width: 64, height: 64 }}>
-                <img
-                  src={p.url}
-                  onClick={() => update("primaryPhotoId", p.id)}
-                  title={p.id === content.primaryPhotoId ? "Primary photo" : "Click to set as primary"}
-                  style={{
-                    width: "100%", height: "100%", objectFit: "cover", borderRadius: RADIUS, cursor: "pointer",
-                    border: p.id === content.primaryPhotoId ? `2px solid ${a.hex}` : `1px solid ${COLORS.hairline}`,
-                  }}
-                />
-                <button
-                  onClick={() => removePhoto(p.id)}
-                  title="Remove photo"
-                  style={{
-                    position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
-                    background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.paper}`,
-                    fontSize: 11, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => fileInputRef.current && fileInputRef.current.click()}
-              disabled={uploading}
-              style={{
-                width: 64, height: 64, borderRadius: RADIUS, border: `1px dashed ${COLORS.hairline}`,
-                background: "none", color: COLORS.muted, fontSize: 20, cursor: uploading ? "default" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit",
-              }}
-            >
-              {uploading ? "…" : "+"}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.heic,.heif"
-              multiple
-              onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
-              style={{ display: "none" }}
-            />
-          </div>
-        </div>
-        {content.photos.length === 0 && !uploadError && (
-          <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 8, fontStyle: "italic" }}>No photos yet — click + to add some.</div>
-        )}
-        {uploadError && (
-          <div style={{ fontSize: 11.5, color: COLORS.tomato, marginTop: 8 }}>{uploadError}</div>
-        )}
-      </div>
-
-      {/* Core details */}
-      <div style={sectionStyle}>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 14 }}>
-          <div>
-            <div style={labelStyle}>Name</div>
-            <input value={content.name} onChange={(e) => update("name", e.target.value)} placeholder={project.name} style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Price</div>
-            <input
-              type="number" min="0" step="0.01"
-              value={content.price}
-              onChange={(e) => update("price", e.target.value)}
-              placeholder="0.00"
-              style={fieldStyle}
-            />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr 1fr", gap: 14, marginBottom: 14 }}>
-          <div>
-            <div style={labelStyle}>Dimensions</div>
-            <input value={content.dimensions} onChange={(e) => update("dimensions", e.target.value)} placeholder={'e.g. 6" tall x 4" wide'} style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Item weight</div>
-            <input value={content.itemWeight} onChange={(e) => update("itemWeight", e.target.value)} placeholder="e.g. 1.2 lb" style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Packaged / shipping weight</div>
-            <input value={content.shippingWeight} onChange={(e) => update("shippingWeight", e.target.value)} placeholder="e.g. 2.5 lb" style={fieldStyle} />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr", gap: 14 }}>
-          <div>
-            <div style={labelStyle}>Materials</div>
-            <input value={content.materials} onChange={(e) => update("materials", e.target.value)} placeholder="e.g. Stoneware, celadon glaze" style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>SKU</div>
-            <input value={content.sku} onChange={(e) => update("sku", e.target.value)} placeholder={project.id} style={fieldStyle} />
-          </div>
-        </div>
-      </div>
-
-      {/* Color */}
-      <div style={sectionStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={labelStyle}>Color</div>
-          <button
-            onClick={addColor}
-            style={{ background: "none", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "3px 10px", fontSize: 11, fontWeight: 600, fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}
-          >
-            + Add color
-          </button>
-        </div>
-        {content.colors.length === 0 && (
-          <div style={{ fontSize: 11.5, color: COLORS.muted, fontStyle: "italic" }}>No colors added yet.</div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {content.colors.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <ColorPickerPopover value={c.hex} onChange={(hex) => updateColor(c.id, "hex", hex)} />
-              <input
-                value={c.label}
-                onChange={(e) => updateColor(c.id, "label", e.target.value)}
-                placeholder="e.g. Celadon green"
-                style={{ ...fieldStyle, flex: 1 }}
-              />
-              <button
-                onClick={() => removeColor(c.id)}
-                title="Remove color"
-                style={{ background: "none", border: "none", color: COLORS.muted, cursor: "pointer", fontSize: 15, padding: 4 }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Care & safety */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Care & safety</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, marginBottom: 14 }}>
-          {CARE_TAG_OPTIONS.map((tag) => {
-            const active = content.careTags.includes(tag);
-            return (
-              <button
-                key={tag}
-                onClick={() => toggleCareTag(tag)}
-                style={{
-                  fontFamily: "inherit", fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: RADIUS, cursor: "pointer",
-                  background: active ? COLORS.ink : "none", color: active ? COLORS.paper : COLORS.muted,
-                  border: `1px solid ${active ? COLORS.ink : COLORS.hairline}`,
-                }}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-        <div style={labelStyle}>Other notes</div>
-        <textarea
-          value={content.notes}
-          onChange={(e) => update("notes", e.target.value)}
-          placeholder="Anything else a buyer should know — care quirks, fragility, one-of-a-kind variation…"
-          style={{ ...fieldStyle, minHeight: 60, resize: "vertical", marginTop: 5 }}
-        />
-      </div>
-
-      {/* Listing copy */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Listing description</div>
-        <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 6 }}>The story/marketing copy that appears on StoreCo and in listings.</div>
-        <textarea
-          value={content.description}
-          onChange={(e) => update("description", e.target.value)}
-          placeholder="A sentence or two about this piece…"
-          style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }}
-        />
-      </div>
-
-      {/* Inventory — the one place quantity/sold state lives. Sales board
-          reads and mirrors this rather than keeping its own counter. */}
-      <div style={sectionStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={labelStyle}>Inventory</div>
-          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={content.isBatch}
-              onChange={(e) => {
-                const isBatch = e.target.checked;
-                setContent((prev) => {
-                  const size = isBatch ? Math.max(2, prev.batchSize) : 1;
-                  return { ...prev, isBatch, batchSize: size, units: resizeUnits(prev.units, size) };
-                });
-              }}
-              style={{ width: 14, height: 14, cursor: "pointer" }}
-            />
-            This is a batch of identical pieces
-          </label>
-        </div>
-
-        {content.isBatch && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: COLORS.muted }}>How many were made</div>
-            <input
-              type="number" min="1"
-              value={content.batchSize}
-              onChange={(e) => {
-                const size = Math.max(1, parseInt(e.target.value, 10) || 1);
-                setContent((prev) => ({ ...prev, batchSize: size, units: resizeUnits(prev.units, size) }));
-              }}
-              style={{ ...fieldStyle, width: 70 }}
-            />
-          </div>
-        )}
-
-        {content.isBatch && (
-          <div style={{ fontSize: 11.5, color: COLORS.muted, marginBottom: 10 }}>
-            {content.units.filter((u) => u.sold).length} of {content.units.length} sold
-          </div>
-        )}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {content.units.map((u, i) => (
-            <UnitRow
-              key={u.id}
-              label={content.isBatch ? `Unit ${i + 1}` : "This piece"}
-              unit={u}
-              accentHex={a.hex}
-              fieldStyle={fieldStyle}
-              onToggle={() => setContent((prev) => ({
-                ...prev,
-                units: prev.units.map((x) => x.id !== u.id ? x : (
-                  x.sold ? { ...x, sold: false, soldDate: null } : { ...x, sold: true, soldDate: x.soldDate || appToday().toISOString().slice(0, 10) }
-                )),
-              }))}
-              onDateChange={(value) => setContent((prev) => ({
-                ...prev,
-                units: prev.units.map((x) => x.id === u.id ? { ...x, soldDate: value } : x),
-              }))}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Status */}
-      <div style={sectionStyle}>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr", gap: 14, alignItems: "start" }}>
-          <div>
-            <div style={labelStyle}>Status</div>
-            <select value={content.status} onChange={(e) => update("status", e.target.value)} style={{ ...fieldStyle, cursor: "pointer" }}>
-              {PRODUCT_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={labelStyle}>StoreCo</div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer", marginTop: 8 }}>
-              <input
-                type="checkbox"
-                checked={content.includeOnStoreCo}
-                onChange={(e) => update("includeOnStoreCo", e.target.checked)}
-                style={{ width: 15, height: 15, cursor: "pointer" }}
-              />
-              Include on public storefront when connected
-            </label>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // A single trackable unit — used for both single pieces (one row) and each
 // unit in a batch, so there's exactly one implementation of "mark sold".
+// Reused by ProjectDetailsPanel (Overview tab) — this used to also back a
+// standalone Product page, since folded into Overview directly.
 function UnitRow({ label, unit, accentHex, fieldStyle, onToggle, onDateChange }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, background: COLORS.cream }}>
@@ -6310,9 +6227,10 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
   const labelStyle = { fontSize: 9.5, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 };
   const displayTitle = (listing.title && listing.title.trim()) || "Untitled listing";
 
-  // Quantity/sold are no longer edited here — the Product page is the one
-  // source of truth for physical inventory (the same pieces might be listed
-  // on several platforms at once, so there's only ever one real count).
+  // Quantity/sold are no longer edited here — the Overview tab's Details
+  // panel is the one source of truth for physical inventory (the same
+  // pieces might be listed on several platforms at once, so there's only
+  // ever one real count).
   // We still mirror the derived numbers into listing.quantity/sales so the
   // Analytics dashboard, which reads those fields directly, keeps working
   // without needing its own copy of this logic.
@@ -6442,7 +6360,7 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
             </div>
             <div>
               <div style={labelStyle}>Quantity</div>
-              <div style={{ ...fieldStyle, background: "none", color: COLORS.muted, display: "flex", alignItems: "center" }} title="Set on the Product page">{qty}</div>
+              <div style={{ ...fieldStyle, background: "none", color: COLORS.muted, display: "flex", alignItems: "center" }} title="Set in the project's Overview Details panel">{qty}</div>
             </div>
             <div>
               <div style={labelStyle}>Revenue</div>
@@ -6452,7 +6370,7 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
 
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <div style={labelStyle}>Sold — {sold} of {qty} <span style={{ textTransform: "none", fontWeight: 400 }}>(synced from Product page)</span></div>
+              <div style={labelStyle}>Sold — {sold} of {qty} <span style={{ textTransform: "none", fontWeight: 400 }}>(synced from Overview)</span></div>
               {onOpenProduct && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onOpenProduct(); }}
@@ -7509,7 +7427,7 @@ function LibraryPickerField({ value, onChange, options, onAddOption, placeholder
 // Multi-select sibling of LibraryPickerField — toggle pills instead of a
 // single dropdown (a dropdown can't show more than one selection cleanly),
 // plus the same inline "+ Add new…" library-growing affordance. Same
-// toggle-pill language as ProductPage's care-tag picker.
+// toggle-pill language as ProjectDetailsPanel's care-tag picker.
 function MultiLibraryPickerField({ value, onChange, options, onAddOption, placeholder }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
