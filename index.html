@@ -7602,6 +7602,19 @@ const LANDING_EYEBROW = {
   textTransform: "uppercase", color: COLORS.muted,
 };
 
+/* Left edge of the hero photograph, expressed against the full-width wrapper.
+   Mirrors the hero grid so the photo starts in the middle of the gutter
+   between the copy and the Home preview, at every viewport width:
+
+     shell is max-width 1240 centred, 40px side padding
+     grid is 0.85fr / 1.15fr with a 56px gap, so the copy column is
+     0.85 / 2.0 = 0.425 of the space left after the gap
+
+   Only used above 1024px, where the hero is two columns and padding is 40. */
+const LANDING_HERO_PHOTO_LEFT =
+  "calc(max(0px, (100% - 1240px) / 2) + 40px" +
+  " + 0.425 * (min(100% - 80px, 1160px) - 56px) + 28px)";
+
 /* Headlines only. Cormorant is a high-contrast face — it needs size and tight
    leading to read as intended, so every use here is >= 26px. */
 const LANDING_DISPLAY = {
@@ -7775,14 +7788,22 @@ function LandingScreen({ onLogIn }) {
           <div
             aria-hidden="true"
             style={{
-              position: "absolute", top: 0, right: 0, bottom: 0, left: "43%",
+              position: "absolute", top: 0, right: 0, bottom: 0,
+              // Left edge is pinned to the layout, not a percentage of the
+              // viewport. A flat percentage drifts left of the copy once the
+              // shell hits its 1240px cap and starts centring — past ~2000px
+              // the text column outruns it and the photo runs under the words.
+              // This resolves to the middle of the grid gutter at every width,
+              // so the photo only ever grows rightward. Percentages are of the
+              // full-width wrapper (not 100vw), so a scrollbar can't push it
+              // out and cause horizontal overflow.
+              left: LANDING_HERO_PHOTO_LEFT,
               backgroundImage: "url('assets/hero-vessel.jpg')",
               backgroundSize: "cover",
-              // The card covers the middle of the panel, so the crop is set to
-              // put the vessel's rim in the strip above it and the foot in the
-              // strip below — otherwise only the belly shows and it reads as a
-              // flat beige field rather than a pot.
-              backgroundPosition: "center 60%",
+              // Anchored low so the vessel's foot stays put as the panel grows
+              // and the pot expands upward, rather than the crop breathing
+              // around the middle of the image.
+              backgroundPosition: "center 82%",
             }}
           />
         )}
