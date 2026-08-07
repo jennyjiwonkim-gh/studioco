@@ -1,93 +1,82 @@
-# StudioCo Handoff
+# MOA Studio Handoff
 
 ## Overall Goal
-StudioCo is Jenny's private, single-file React + Babel-standalone ceramic-studio
+MOA Studio is Jenny's private, single-file React + Babel-standalone ceramic-studio
 management app (`index.html` at repo root, no build step), deployed via
 Netlify (auto-builds from GitHub on push to `main`), backed by Supabase for
 persistence.
 
-## Current Status (as of this session, 2026-08-06)
-- Live site is still exactly commit `0bf4483` (last session's push) — **no
-  app code changed this session**, docs only.
-- Local commit **`75e4b44`** sits on top of that, containing this session's
-  full documentation restructure (see below). **Explicitly not pushed** —
-  Jenny asked directly not to push to `main` for this. Push whenever she
-  says so; nothing time-sensitive about it.
-- Netlify is still on the Personal plan (1,000 credits/mo). Jenny corrected
-  an assumption this session: don't treat that upgrade as removing cost
-  concerns — stay frugal about triggering deploys on principle, not just as
-  a policy against running out. Codified in both memory
-  (`feedback_frugal_netlify_credits.md`) and now `CLAUDE.md`'s "Deploy loop"
-  section directly, so it's durable in the repo itself, not just my memory.
+## Current Status (as of this session, 2026-08-07)
+- Branch **`landing-page-redesign`**, cut from `origin/main` (not from the
+  older PR branch). **PR #4 is open** against `main`, deliberately not merged.
+  Nothing pushed to `main` — no production deploy, no credits spent.
+- Deploy preview confirmed `ready` via the Netlify API (`commit_ref`
+  `d7682b3`, `error_message: null`):
+  `https://deploy-preview-4--studioco-app.netlify.app` — needs Netlify SSO
+  team login to open, on top of the app's own auth gate.
+- The work: the pre-login public landing page has been rebuilt, and waitlist
+  signups now really persist. See `PLAN.md` for the initiative.
+- **Jenny has not seen the rendered page yet** — she chose the structure and
+  made the design call below from descriptions, not screenshots. Her visual
+  review is the immediate next step, and changes should be expected.
 
 ## What Changed This Session
+1. Read Jenny's Claude Design mockup "Pottery tracker landing page".
+   `WebFetch` 403s on `claude.ai/design/*`; the route that worked was the
+   design tool's own file API (`OmeletteService/ListFiles` → `GetFile`,
+   base64-decoded) from a logged-in browser tab. Screenshots alone would have
+   lost the exact values.
+2. Rebuilt `LandingScreen` in `index.html` as a full marketing page: nav, the
+   original landing copy full-width on top, a product hero, a "Built for
+   artists" strip, a flat recreation of Home, five alternating feature bands
+   with small mock panels, a dark early-access CTA, and a footer.
+3. Kept it in the app's own language rather than the mockup's — `ProjectIcon`
+   vessel silhouettes instead of the mockup's generic outline icons, and
+   `COLORS`/`RADIUS` tokens instead of raw hexes.
+4. Wired the waitlist for real (schema documented in `CLAUDE.md`). The gotcha
+   worth remembering: an RLS policy alone is **not** enough — the table
+   `GRANT` is also required. The first end-to-end test failed with `42501`
+   until `grant insert … to anon, authenticated` was added. Verified after
+   the fix that INSERT succeeds while SELECT and DELETE are both refused.
+5. Ran `studioco-design-reviewer`. It flagged the mockup's five pastel band
+   tints and the decorative circle behind the hero vessel as tinted-fill
+   drift against `CLAUDE.md`. Put it to Jenny; she chose **neutral
+   cream/paper alternation**, so both were removed — mock cards now take the
+   opposite surface of the band they sit on, so nothing is white-on-white.
+   The reviewer's other finding, four hardcoded dark-theme hexes, is fixed
+   via a named `LANDING_DARK_CARD` constant.
 
-### 1. Documentation restructure — TODO.md / PLAN.md carved out
-`CLAUDE.md`'s "Outstanding work" and `handoff.md`'s "Exact Next Steps" /
-"Open Question" sections were getting heavy. Split into two new files:
-- **`TODO.md`** (new) — flat standing backlog, no dates/narrative. Holds the
-  5 feature items formerly in `CLAUDE.md` (AI copy-tasks, freeform paste,
-  storefront vibe reader, real IG/Shopify/Etsy integrations, Home screen
-  content) plus the still-unresolved `savePersisted` silent-failure item.
-- **`PLAN.md`** (new) — single active initiative only: the project landing
-  page redesign (`ProjectDashboard`/`BoardScreen`), with the reference
-  Artifact link and concrete steps. Gets replaced wholesale, not
-  accumulated, when the active initiative changes.
-- **`CLAUDE.md`** — "Outstanding work" replaced with a pointer to `TODO.md`.
-  New **"Documentation file allocation"** section added, spelling out each
-  of the four `.md` files' job and instructing: every time `handoff.md` is
-  written (i.e. end of session), cross-check `TODO.md`/`PLAN.md` against
-  what actually happened and reconcile them. This session is the first time
-  following that instruction — checked both; no items needed updating
-  (nothing on either list was touched this session).
-- **`handoff.md`** — trimmed to point at `PLAN.md`/`TODO.md` instead of
-  carrying "Exact Next Steps"/"Open Question" directly. This is also the
-  **first commit `handoff.md` has ever had** — it existed as an untracked
-  file across prior sessions until now.
-
-### 2. Netlify credit philosophy reaffirmed
-Jenny explicitly corrected the assistant for framing the Free→Personal plan
-upgrade as meaning credits are "no longer a real cost concern." Standing
-instruction going forward: keep minimizing deploys on principle regardless
-of plan tier, keep preferring deploy previews over `main` pushes, never push
-to `main` without her explicit go-ahead. See `CLAUDE.md`'s Deploy loop
-section and memory `feedback_frugal_netlify_credits.md`.
-
-### 3. Housekeeping notes (no action taken)
-- `Pottery tracker landing page.zip`, `marina_vase.HEIC`, and
-  `mccall_bowls.heic` — present at the start of this session, gone from disk
-  by the time of the commit. Not caused by anything in this session (never
-  staged/touched), never tracked by git either way. Flagging in case it's
-  unexpected on Jenny's end; no cleanup performed.
-- A new untracked file, `StudioCo Landing/image-gen-1.png` (dated today),
-  appeared during this session — also not created by anything done here.
-- Confirmed the `Pottery tracker landing page.zip` (before it disappeared)
-  was a claude.ai web design-tool export (`.dc` file, `image-slot.js`/
-  `support.js` scaffolding, pasted screenshots + a `studioco-v50.html` and
-  `uploads/CLAUDE.md`) — not something this Claude Code session or any
-  previous one produced.
-- Jenny confirmed she's fine with the rest of the untracked repo contents
-  (`.claude/`, `Archive/`, `Redesign/`, `SaleCo/`, `StudioCo Landing/`)
-  staying as-is — no cleanup requested, nothing actioned.
+## Decisions Jenny Made This Session
+- Keep **both** the old landing copy (top, full width) and the new marketing
+  page (underneath) — not one replacing the other.
+- Drop the "eight stages" references; the rest of the old copy stays as-is.
+- Remove "Create an account", keep "Log in", make "Join the waitlist" the CTA.
+- Wire the waitlist to real storage rather than faking the success state.
+- Neutral cream/paper bands instead of the mockup's pastel tints.
 
 ## Next Steps
-See `PLAN.md` for the active initiative (landing page redesign) and
-`TODO.md` for the backlog. Nothing session-specific left open beyond those —
-this was a pure documentation-hygiene session.
+1. **Jenny reviews the rendered page** — via the PR #4 deploy preview above,
+   or locally.
+2. Apply whatever she wants changed, then the merge decision on PR #4.
+3. Separately, **PR #3 is still open and unmerged** (see `PLAN.md`).
 
 ## Testing Environment Notes (carries forward)
-- No Node/npm available in the shell environment as of the last session that
-  needed it (2026-08-06 photo-fix session) — the esbuild syntax-check step
-  from `CLAUDE.md`'s testing methodology couldn't run then. Worth
-  re-checking whether Node is available next time a code change (not just
-  docs) needs testing.
-- A PowerShell `HttpListener` static file server was left running across
-  sessions on `http://127.0.0.1:8744/`, serving the whole repo root (script
-  lives in a session scratchpad, not the repo) — last confirmed live
-  2026-08-06. Not touched this session (no code testing needed). Reuse
-  rather than starting a new one on the same port if still alive.
-- `.claude/worktrees/agile-mixing-cat/` still exists with a stale
-  `index.html`/`home-redesign-preview.html` (last touched 2026-08-05) —
-  `redesign-concept.html` inside it is the reference file `PLAN.md` points
-  to for the landing-page redesign, so keep the worktree until that's done;
-  safe to clean up after.
+- Node/npm/esbuild are still unavailable in this shell, so the esbuild
+  syntax-check step from `CLAUDE.md` can't run. The substitute that works:
+  serve the repo and read the browser console — a Babel syntax error surfaces
+  as an `EXCEPTION` and leaves `#root` empty.
+- `python` in Git Bash **and** `python.exe` in PowerShell are both the Windows
+  Store alias stub, not an interpreter. Use a PowerShell
+  `System.Net.HttpListener` static server instead. This session's copy went to
+  the job tmp dir (port 8746) and is not durable — recreate it next time,
+  it's ~40 lines.
+- **New this session:** Chrome on Windows won't size a window below ~545px, so
+  `resize_window` cannot actually reach the 320px breakpoint — it reports
+  success while `innerWidth` stays ~545. Use a 320px-wide iframe. This is what
+  caught the 22px nav overflow that eyeballing missed. Written up in
+  `CLAUDE.md` along with the `minmax(0, 1fr)` and JSX-comment traps.
+- Netlify deploy previews still require SSO team login to open in a browser;
+  confirm builds via the Netlify MCP reader (`commit_ref` + `state`) instead.
+- `.claude/worktrees/agile-mixing-cat/` still exists, untouched — it holds the
+  `redesign-concept.html` reference for the still-open PR #3 initiative. Keep
+  it until that lands.

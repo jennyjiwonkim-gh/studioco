@@ -1,12 +1,26 @@
-# StudioCo
+# MOA Studio
 
 A private studio-management app for ceramic artists, built and used by Jenny
 (solo ceramic artist, Instagram `@offline_jenny`). Single-file React + in-browser
 Babel, no build step. Deployed as `index.html` at the repo root; Netlify
 auto-deploys on every push to `main`.
 
+**Renamed from "StudioCo" on 2026-08-07.** The product name changed; a set of
+identifiers deliberately did not, and must not be "tidied up" later:
+
+- the `studioco:` localStorage keys (`AUTH_KEYS`, `STORAGE_PREFIX`) — renaming
+  them signs the user out and orphans every cached value.
+- `studioco-app.netlify.app` and the GitHub repo — real infrastructure names.
+- the `StudioCo Landing/` folder and `StudioCo Landing.dc.html` — real paths
+  on disk.
+- the "StudioCo — Redesign Concept" Artifact, which is its actual title.
+
+Everything user-facing was capital-S `StudioCo` and every identifier is
+lowercase `studioco`, so a **case-sensitive** replace separates the two
+cleanly. Never run a case-insensitive one.
+
 A second, separate site — **StoreCo** — is the public-facing sales/archive
-window. StudioCo is the private workshop and the source of truth; StoreCo is fed
+window. MOA Studio is the private workshop and the source of truth; StoreCo is fed
 by it. Do not merge them.
 
 ---
@@ -26,6 +40,39 @@ by it. Do not merge them.
 ## Design north star
 
 Bauhaus-editorial. Inter; `border-radius: 3px` (sharp, not 0, not soft).
+
+**Display face:** headlines on the public landing page use **Cormorant
+Garamond** (`SERIF` in `index.html`) — Jenny's call, added 2026-08-07, because
+the sans headlines read flat on a marketing page. It is a high-contrast face:
+use it only at large sizes (>= 26px) with tight leading, never for UI, labels,
+controls or body copy. Everything inside the app proper is still Inter.
+
+**Static assets:** `assets/` at the repo root, served by Netlify alongside
+`index.html` and referenced by relative path — the only non-`.md`, non-HTML
+content in the repo. Both current images come from the same Pexels photo by
+**Raymond Petrik** (free to use under the Pexels licence, no attribution
+required), a 4104x6039 / 4 MB original that lives outside the repo in
+`StudioCo Landing/`:
+
+- `hero-vessel.jpg` — the hero background, downscaled to 1200px wide at q82
+  (~233 KB).
+- `vase-cutout.jpg` — the same vase with its background removed, for the
+  waitlist band. **It is a JPEG, not a PNG, and its background is not
+  transparent — it is flood-filled with `#111111` to match `--ink`.** As a
+  transparent PNG this was 1.7 MB; composited onto the band's own colour it is
+  107 KB and looks identical. The catch: if that band ever stops being
+  `#111111`, this image will show as a dark rectangle and must be re-exported.
+
+Always resize and recompress before committing an image; do not ship
+camera-sized originals, and do not base64 them into `index.html`, which is
+already ~375 KB.
+
+Background removal is worth a note: the vase is lit from the right, so its
+shadowed left edge is *darker* than the shadowed wall beside it. No threshold
+or flood-fill separates them — both were tried and both failed. Use a real
+matting tool (Jenny used remove.bg). Its free tier returns a small preview, so
+the trick is to take the alpha from that preview, upscale it, and apply it to
+the full-resolution original rather than upscaling the preview itself.
 Cream `#F8F6F1` background. Project identity is carried by a **colored left-border
 stripe** plus a vessel silhouette icon — never by tinted background fills.
 
@@ -59,6 +106,19 @@ debounced and go through `savePersisted`. Auth is Supabase email/password via
 the REST API (no client SDK — it does not work as a plain CDN script in a
 single-file app). Expired access tokens refresh once and retry automatically.
 
+One table sits outside that model: `waitlist_signups` (`id`, `email`,
+`created_at`), written by the public landing page's "Join the waitlist" form
+via `submitWaitlistEmail` — the only write in the app that runs **without** a
+session. It grants `anon`/`authenticated` **INSERT only**, with a matching
+insert RLS policy and no SELECT/UPDATE/DELETE grant, so signups can be added
+from the public page but the list can never be read back over the public API.
+Read it from the Supabase dashboard/service role. Note that RLS and the table
+`GRANT` are both required — a policy alone still returns `42501`.
+
+There is no migrations directory in this repo; schema changes are applied
+straight to Supabase (same as the original `app_state` table) and documented
+here.
+
 ## Testing methodology
 
 1. Extract the JSX from the `<script type="text/babel">` block and syntax-check
@@ -84,8 +144,34 @@ single-file app). Expired access tokens refresh once and retry automatically.
   z-index: 0`.
 - Locally-opened `file://` pages break CDN-loaded libraries. Test deployed, or
   vendor the libs.
+- Chrome on Windows refuses to size a window narrower than ~545px, so
+  `resize_window` **cannot** actually test the 320px breakpoint — it silently
+  reports success while `window.innerWidth` stays ~545. Load the page inside a
+  320px-wide `<iframe>` instead: the inner document gets a genuine 320px
+  viewport. Then assert on
+  `documentElement.scrollWidth - clientWidth` for horizontal overflow, and walk
+  the elements comparing `getBoundingClientRect().right` to find which one
+  overflows. This caught a real 22px nav overflow that eyeballing missed.
+- A bare `1fr` grid track has a min-content floor, so long cell text silently
+  pushes columns to uneven widths at narrow viewports. Use `minmax(0, 1fr)`
+  whenever the cells contain wrapping text.
+- `{/* … */}` is a JSX comment and is only valid where JSX *children* are
+  expected. Inside the parens of `{cond && ( … )}` it parses as a block
+  statement and Babel fails with `Unexpected token, expected ","`. Use a plain
+  `/* … */` there, or move the comment above the `{cond && (`. Babel's reported
+  line numbers are relative to the inline `<script>`, not the file — add the
+  script's start line (~70) to map them back.
 - The file must be named **`index.html`** — web servers serve that by default;
   any other name 404s at the site root.
+- In Git Bash, `python` resolves to the Windows Store app-execution-alias
+  stub, not a real interpreter — it just prints an install prompt and exits,
+  it does not serve anything. Use PowerShell's `python.exe` directly, or a
+  small PowerShell `System.Net.HttpListener` script as a static file server.
+- Netlify deploy previews for this project require SSO team login to open
+  directly in a browser (non-production access control), on top of the
+  app's own Supabase auth gate. Don't try to click through a preview URL to
+  confirm a deploy — check `commit_ref` and `state` via the Netlify API/MCP
+  reader instead (`get-deploy-for-site`).
 - `.claude/settings.local.json`'s git permission allowlist is intentionally
   narrow (status/diff/log/show/add/commit -m/branch listing/checkout -b/
   checkout main/fetch/remote -v/ls-files/ls-remote/stash list & push/plain

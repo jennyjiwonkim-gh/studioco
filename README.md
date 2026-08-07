@@ -1,2 +1,2 @@
 # studioco
-StudioCo — art project business management app
+MOA Studio — art project business management app

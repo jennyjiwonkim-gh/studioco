@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>StudioCo — Prototype</title>
+<title>MOA Studio — Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -96,6 +96,13 @@ const COLORS = {
 };
 
 const RADIUS = 3; // sharp, editorial — not 0, not soft
+
+/* Display face, for headlines only — Inter still carries every piece of UI,
+   body copy, label and control in the app. Jenny's call: the sans headlines
+   read flat on the public page, and a high-contrast garamond gives it the
+   editorial weight the rest of the system is aiming at. Used at large sizes
+   with tight leading; never below ~20px, where its thin strokes fall apart. */
+const SERIF = '"Cormorant Garamond", "Iowan Old Style", Georgia, serif';
 
 // Project accent = one hue each, used only as: left stripe, small dot, tag text.
 // Each resolves through a CSS variable so the hue stays recognisable in both
@@ -456,6 +463,22 @@ const Auth = {
   },
 };
 
+/* Public waitlist capture — no session required. Backed by a dedicated
+   waitlist_signups table with an anon insert-only RLS policy (no read),
+   separate from the authenticated app_state data store. */
+async function submitWaitlistEmail(email) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/waitlist_signups", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Couldn’t join the waitlist — try again.");
+}
+
 /* One fetch wrapper for every data call: attaches the token, and on a 401
    refreshes once and retries. Anything still failing throws to the caller. */
 async function authedFetch(path, options) {
@@ -542,7 +565,7 @@ async function loadAllPersisted() {
     } catch (e) {
       // The row existed but its contents were corrupt/unparseable. That IS
       // worth a warning — fall back to the seed and let the user keep working.
-      console.warn("StudioCo: discarding unreadable saved data for", key, e);
+      console.warn("MOA Studio: discarding unreadable saved data for", key, e);
     }
   }
   return out;
@@ -599,7 +622,7 @@ async function savePersisted(key, value, keepalive) {
       body: JSON.stringify({ user_id: storeUserId, key, value: JSON.stringify(value), updated_at: new Date().toISOString() }),
     });
     if (!res.ok) {
-      console.warn("StudioCo: could not save", key, await res.text());
+      console.warn("MOA Studio: could not save", key, await res.text());
       pendingRetries.set(key, value);
       publishSaveStatus("error");
       scheduleRetry();
@@ -609,7 +632,7 @@ async function savePersisted(key, value, keepalive) {
     if (pendingRetries.size === 0) publishSaveStatus("ok");
     return true;
   } catch (e) {
-    console.warn("StudioCo: could not save", key, e);
+    console.warn("MOA Studio: could not save", key, e);
     pendingRetries.set(key, value);
     publishSaveStatus("error");
     scheduleRetry();
@@ -716,12 +739,25 @@ const CONTENT_LIBRARY_SEED = {
   types: ["Carousel", "Long-form video", "Reel — no explainer", "Reel — talk to camera", "Reel — voiceover", "Story"],
   series: ["Motivation Monday", "WIP Wednesday", "Feature Friday"],
   platforms: ["Instagram", "TikTok", "YouTube"],
+  // Overview's Details panel "Tags" field (formerly a fixed "Care & safety"
+  // list) — same shared, growable library pattern as types/series/platforms,
+  // seeded with the values that used to be hardcoded so existing pieces'
+  // saved tags stay valid.
+  tags: ["Food safe", "Dishwasher safe", "Microwave safe", "Oven safe", "Hand wash only", "Not for hot liquids", "Decorative only"],
 };
+
+// Platform moved from a single value to multi-select — pieces saved before
+// that change still carry the old singular `platform` string, so every read
+// site goes through this instead of touching `piece.platforms` directly.
+function piecePlatforms(piece) {
+  if (piece.platforms) return piece.platforms;
+  return piece.platform ? [piece.platform] : [];
+}
 
 /* Resolves window.storage once, then hands AppInner fully-formed initial
    values. This is the async gate: nothing in AppInner (or any board under
    it) ever has to know storage is async, because it never mounts until the
-   real values — synced from wherever else this account has used StudioCo —
+   real values — synced from wherever else this account has used MOA Studio —
    are already in hand. */
 function StudioApp({ onSignOut, email }) {
   const [ready, setReady] = React.useState(false);
@@ -817,13 +853,15 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
   const goStudio = () => setScreen({ name: "studio" });
   const goProject = (projectId) => setScreen({ name: "projectDashboard", projectId });
   const goBoard = (projectId, boardKey) => setScreen({ name: "board", projectId, boardKey });
-  const goProduct = (projectId) => setScreen({ name: "product", projectId });
   const goStudioTab = (tabKey) => { setStudioTab(tabKey); setScreen({ name: "studio" }); };
   // Home is just the first Studio tab now, so "going home" is the same
   // action as switching to any other tab — no separate screen state needed.
   const goHome = () => goStudioTab("home");
+  // The project-detail header's back arrow always returns to the Projects
+  // list, regardless of which tab (Overview or a board) it's clicked from.
+  const goProjectList = () => goStudioTab("project");
 
-  const activeProject = (screen.name === "projectDashboard" || screen.name === "board" || screen.name === "product") ? projects.find((p) => p.id === screen.projectId) : null;
+  const activeProject = (screen.name === "projectDashboard" || screen.name === "board") ? projects.find((p) => p.id === screen.projectId) : null;
 
   // Project Dashboard and every board page belong to the same project, so
   // they always anchor bottom-right with that project's own icon and color.
@@ -894,24 +932,16 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
       {screen.name === "projectDashboard" && (
         <ProjectDashboard
           project={projects.find((p) => p.id === screen.projectId)}
+          projects={projects}
           setProjects={setProjects}
           tasks={tasks}
-          onBack={goStudio}
+          boardContent={boardContent}
+          setBoardContent={setBoardContent}
+          contentLibrary={contentLibrary}
+          setContentLibrary={setContentLibrary}
+          onBack={goProjectList}
           onOpenBoard={goBoard}
-          onOpenProduct={goProduct}
-        />
-      )}
-      {screen.name === "product" && (
-        <ProductPage
-          project={projects.find((p) => p.id === screen.projectId)}
-          content={normalizeProduct(boardContent[screen.projectId + ":product"])}
-          setContent={(updater) => setBoardContent((prev) => {
-            const key = screen.projectId + ":product";
-            const current = normalizeProduct(prev[key]);
-            const next = typeof updater === "function" ? updater(current) : updater;
-            return { ...prev, [key]: next };
-          })}
-          onBack={() => goProject(screen.projectId)}
+          onSwitchProject={goProject}
         />
       )}
       {screen.name === "board" && (
@@ -919,10 +949,12 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
           projectId={screen.projectId}
           boardKey={screen.boardKey}
           projects={projects}
-          onBack={() => goProject(screen.projectId)}
+          setProjects={setProjects}
+          onBack={goProjectList}
+          onGoOverview={() => goProject(screen.projectId)}
           onSwitchProject={(pid) => goBoard(pid, screen.boardKey)}
           onSwitchBoard={(boardKey) => goBoard(screen.projectId, boardKey)}
-          onOpenProduct={goProduct}
+          onOpenProduct={goProject}
           boardContent={boardContent}
           setBoardContent={setBoardContent}
           tasks={tasks}
@@ -944,7 +976,7 @@ function SaveStatusIndicator({ phone }) {
   if (status !== "error") return null;
   return (
     <div
-      title="Some changes haven't saved yet. StudioCo will keep retrying automatically — keep this tab open until it clears."
+      title="Some changes haven't saved yet. MOA Studio will keep retrying automatically — keep this tab open until it clears."
       style={{ display: "flex", alignItems: "center", gap: 5, color: COLORS.tomato, fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}
     >
       <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} aria-hidden="true" />
@@ -974,7 +1006,7 @@ function TopBar({ onLogoClick, onMenuClick, theme, onToggleTheme, viewport }) {
           </div>
           {!phone && (
             <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              StudioCo
+              MOA Studio
             </span>
           )}
         </div>
@@ -1670,7 +1702,7 @@ function buildAnalyticsRows(projects, boardContent) {
         projectName: p.name,
         type: "Content",
         title: (piece.title && piece.title.trim()) || "Untitled content piece",
-        platform: piece.platform || "—",
+        platform: piecePlatforms(piece).join(", ") || "—",
         reach: Number(perf.reach) || 0,
         secondary: Number(perf.engagement) || 0,
         revenue: 0,
@@ -4077,15 +4109,22 @@ function TaskListView({ projects, tasks, setTasks, onOpenProject }) {
 
 /* ---------- Project Dashboard (Stage 2) ---------- */
 const BOARD_STAGES = [
-  { key: "planning", label: "Inspiration and Planning" },
+  { key: "planning", label: "Plan" },
   { key: "making", label: "Craft" },
   { key: "content", label: "Content" },
   { key: "marketing", label: "Marketing" },
   { key: "sales", label: "Sales" },
-  { key: "learnings", label: "Learnings" },
+  { key: "learnings", label: "Notes" },
 ];
 
-// ---- Product page (per-project final listing spec sheet) ----
+// The project-detail tab strip: Overview (the dashboard/summary) plus every
+// pipeline board, in order. Overview isn't a board key/boardContent slot —
+// it's the ProjectDashboard screen — so it's prepended here rather than
+// folded into BOARD_STAGES itself.
+const PROJECT_TABS = [{ key: "overview", label: "Overview" }, ...BOARD_STAGES];
+
+// ---- Product record (final listing spec sheet, shown in Overview's Details
+// panel — see ProjectDetailsPanel) ----
 // Field names deliberately mirror StoreCo's PIECES model (title/price/
 // description/materials/dimensions) so this record can feed StoreCo, and
 // eventually a real Shopify product, without renaming anything.
@@ -4116,15 +4155,6 @@ const DEFAULT_PRODUCT = {
   batchSize: 1,
   units: [{ id: "unit-1", sold: false, soldDate: null }],
 };
-const CARE_TAG_OPTIONS = [
-  "Food safe",
-  "Dishwasher safe",
-  "Microwave safe",
-  "Oven safe",
-  "Hand wash only",
-  "Not for hot liquids",
-  "Decorative only",
-];
 const PRODUCT_STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
   { value: "ready", label: "Ready to list" },
@@ -4185,22 +4215,57 @@ const PROJECT_META = {
   "newport-inspo": { description: "", targetPostDate: null, priority: "Low", budget: 0 },
 };
 
-function ProjectDashboard({ project, setProjects, tasks, onBack, onOpenBoard, onOpenProduct }) {
-  const viewport = useViewport();
-  const [editingPriority, setEditingPriority] = useState(false);
+// Compact "switch project" control — a native <select> sized down to just
+// its arrow glyph, sitting right after the project name. Native <select> so
+// it stays a real, accessible control (keyboard, screen readers) even though
+// visually it's just a triangle, same trick FilterDropdown uses elsewhere
+// with a visible box — this is the same idea shrunk to an icon-only hit target.
+function ProjectSwitchToggle({ projects, value, onChange }) {
+  const sorted = [...projects].sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <div style={{ position: "relative", width: 30, height: 26, flexShrink: 0 }}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Switch project"
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          background: COLORS.paper,
+          border: `1px solid ${COLORS.hairline}`,
+          borderRadius: RADIUS,
+          padding: "0 18px 0 8px",
+          fontSize: 13,
+          fontFamily: "inherit",
+          fontWeight: 500,
+          color: "transparent",
+          cursor: "pointer",
+          appearance: "none",
+          WebkitAppearance: "none",
+        }}
+      >
+        {sorted.map((p) => (
+          <option key={p.id} value={p.id} style={{ color: COLORS.ink, fontFamily: "inherit" }}>{p.name}</option>
+        ))}
+      </select>
+      <DropdownArrow />
+    </div>
+  );
+}
+
+// Shared header for every project-detail screen (Overview + each board) —
+// back arrow, editable project name, project-switch toggle, and the
+// Overview/Plan/Craft/Content/Marketing/Sales/Notes tab strip. Used by both
+// ProjectDashboard and BoardScreen so the header/tabs stay visually
+// identical and don't reset while flipping between tabs, even though each
+// tab is still its own screen under the hood (`AppInner`'s `screen` state).
+function ProjectScreenHeader({ project, projects, setProjects, activeTab, onBack, onSwitchTab, onSwitchProject, statusLabel, subtitle }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
-  if (!project) return null;
   const a = PROJECT_ACCENTS[project.accentIdx];
-  const meta = PROJECT_META[project.id] || {};
-  // Live edits on the project itself take precedence over the seed metadata —
-  // same precedence Project View already uses, so editing priority from either
-  // screen shows up consistently on both.
-  const priority = project.priority || meta.priority || "—";
-  const updatePriority = (value) => {
-    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, priority: value } : p)));
-    setEditingPriority(false);
-  };
+
   const startEditingName = () => {
     setNameDraft(project.name);
     setEditingName(true);
@@ -4214,6 +4279,437 @@ function ProjectDashboard({ project, setProjects, tasks, onBack, onOpenBoard, on
       setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, name: trimmed } : p)));
     }
     setEditingName(false);
+  };
+
+  return (
+    <div style={{ borderLeft: `4px solid ${a.hex}`, paddingLeft: 18, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <button
+            onClick={onBack}
+            aria-label="Back to Projects"
+            title="Back to Projects"
+            style={{ border: "none", background: "none", cursor: "pointer", padding: 4, margin: "0 0 0 -4px", fontSize: 18, color: COLORS.muted, lineHeight: 1, display: "flex", flexShrink: 0 }}
+          >
+            ←
+          </button>
+          <ProjectIcon icon={project.icon} color={a.hex} size={22} />
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitName();
+                if (e.key === "Escape") setEditingName(false);
+              }}
+              style={{
+                fontSize: 20,
+                fontWeight: 700,
+                letterSpacing: "0.01em",
+                fontFamily: "inherit",
+                color: COLORS.ink,
+                background: COLORS.cream,
+                border: `1px solid ${COLORS.hairline}`,
+                borderRadius: RADIUS,
+                padding: "2px 8px",
+                minWidth: 160,
+              }}
+            />
+          ) : (
+            <h1 onClick={startEditingName} title="Click to rename" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "0.01em", margin: 0, cursor: "text" }}>
+              {project.name}
+            </h1>
+          )}
+          <ProjectSwitchToggle projects={projects} value={project.id} onChange={onSwitchProject} />
+        </div>
+        {statusLabel}
+      </div>
+      {subtitle}
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", borderBottom: `1px solid ${COLORS.hairline}`, marginTop: 16 }}>
+        {PROJECT_TABS.map((t) => (
+          <TabButton key={t.key} active={activeTab === t.key} onClick={() => onSwitchTab(t.key)}>{t.label}</TabButton>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// A single non-empty row in the Details panel's read ("completed") view —
+// mirrors the reference mockup's key/value rows. Renders nothing for an
+// empty value so an unfilled optional field doesn't pad the summary with
+// dashes once the panel has enough content to switch out of edit mode.
+function DetailRow({ label, value, children }) {
+  if (!value && !children) return null;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${COLORS.hairline}`, fontSize: 12.5 }}>
+      <span style={{ color: COLORS.muted, flexShrink: 0 }}>{label}</span>
+      {children || <span style={{ fontWeight: 600, textAlign: "right" }}>{value}</span>}
+    </div>
+  );
+}
+
+function hasProductDetails(content) {
+  return !!(content.name || content.price || content.dimensions || content.materials || content.description || content.colors.length || content.careTags.length);
+}
+
+// The final-listing spec sheet (name, price, dimensions, care, inventory…),
+// inline on the Overview tab rather than a separate click-in page. Starts in
+// its compact read view once real details exist; a bare/new project starts
+// in edit mode directly, since there's nothing yet to summarize.
+function ProjectDetailsPanel({ content, setContent, accentHex, projectId, contentLibrary, setContentLibrary }) {
+  const [editing, setEditing] = useState(() => !hasProductDetails(content));
+
+  const update = (field, value) => setContent((prev) => ({ ...prev, [field]: value }));
+  const addColor = () => {
+    setContent((prev) => ({
+      ...prev,
+      colors: [...prev.colors, { id: "color-" + Date.now(), hex: PROJECT_ACCENTS[0].hex, label: "" }],
+    }));
+  };
+  const updateColor = (id, field, value) => {
+    setContent((prev) => ({ ...prev, colors: prev.colors.map((c) => (c.id === id ? { ...c, [field]: value } : c)) }));
+  };
+  const removeColor = (id) => setContent((prev) => ({ ...prev, colors: prev.colors.filter((c) => c.id !== id) }));
+
+  const fieldStyle = {
+    background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS,
+    padding: "8px 10px", fontSize: 13, fontFamily: "inherit", color: COLORS.ink, width: "100%",
+  };
+  const labelStyle = { fontSize: 10, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 };
+  const ghostBtnStyle = { background: "none", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "4px 11px", fontSize: 11, fontWeight: 600, fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" };
+
+  const statusLabel = (PRODUCT_STATUS_OPTIONS.find((s) => s.value === content.status) || {}).label || content.status;
+  const soldCount = content.units.filter((u) => u.sold).length;
+  const inventorySummary = content.isBatch ? `${soldCount} of ${content.units.length} sold` : (content.units[0] && content.units[0].sold ? "Sold" : "Available");
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <SectionLabel>Details</SectionLabel>
+        <button onClick={() => setEditing((e) => !e)} style={ghostBtnStyle}>{editing ? "Done" : "Edit"}</button>
+      </div>
+
+      {editing ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <div style={labelStyle}>Listing name</div>
+            <input value={content.name} onChange={(e) => update("name", e.target.value)} placeholder="Defaults to project name" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Status</div>
+            <select value={content.status} onChange={(e) => update("status", e.target.value)} style={{ ...fieldStyle, cursor: "pointer" }}>
+              {PRODUCT_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={labelStyle}>Price</div>
+            <input type="number" min="0" step="0.01" value={content.price} onChange={(e) => update("price", e.target.value)} placeholder="0.00" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Dimensions</div>
+            <input value={content.dimensions} onChange={(e) => update("dimensions", e.target.value)} placeholder={'e.g. 6" tall x 4" wide'} style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Item weight</div>
+            <input value={content.itemWeight} onChange={(e) => update("itemWeight", e.target.value)} placeholder="e.g. 1.2 lb" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Packaged / shipping weight</div>
+            <input value={content.shippingWeight} onChange={(e) => update("shippingWeight", e.target.value)} placeholder="e.g. 2.5 lb" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>Materials</div>
+            <input value={content.materials} onChange={(e) => update("materials", e.target.value)} placeholder="e.g. Stoneware, celadon glaze" style={fieldStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>SKU</div>
+            <input value={content.sku} onChange={(e) => update("sku", e.target.value)} placeholder={projectId} style={fieldStyle} />
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={labelStyle}>Color</div>
+              <button onClick={addColor} style={ghostBtnStyle}>+ Add color</button>
+            </div>
+            {content.colors.length === 0 && <div style={{ fontSize: 11.5, color: COLORS.muted, fontStyle: "italic" }}>No colors added yet.</div>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {content.colors.map((c) => (
+                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <ColorPickerPopover value={c.hex} onChange={(hex) => updateColor(c.id, "hex", hex)} />
+                  <input value={c.label} onChange={(e) => updateColor(c.id, "label", e.target.value)} placeholder="e.g. Celadon green" style={{ ...fieldStyle, flex: 1 }} />
+                  <button onClick={() => removeColor(c.id)} title="Remove color" style={{ background: "none", border: "none", color: COLORS.muted, cursor: "pointer", fontSize: 15, padding: 4 }}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={labelStyle}>Listing description</div>
+            <textarea value={content.description} onChange={(e) => update("description", e.target.value)} placeholder="A sentence or two about this piece…" style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
+          </div>
+
+          <div>
+            <div style={labelStyle}>Tags</div>
+            <div style={{ marginTop: 6 }}>
+              <MultiLibraryPickerField
+                value={content.careTags}
+                onChange={(val) => update("careTags", val)}
+                options={contentLibrary.tags}
+                onAddOption={(val) => setContentLibrary((prev) => ({ ...prev, tags: [...prev.tags, val] }))}
+                placeholder="No tags in your library yet — add one"
+                addLabel="+ Add tag"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div style={labelStyle}>Other notes</div>
+            <textarea value={content.notes} onChange={(e) => update("notes", e.target.value)} placeholder="Care quirks, fragility, one-of-a-kind variation…" style={{ ...fieldStyle, minHeight: 50, resize: "vertical" }} />
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={labelStyle}>Inventory</div>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={content.isBatch}
+                  onChange={(e) => {
+                    const isBatch = e.target.checked;
+                    setContent((prev) => {
+                      const size = isBatch ? Math.max(2, prev.batchSize) : 1;
+                      return { ...prev, isBatch, batchSize: size, units: resizeUnits(prev.units, size) };
+                    });
+                  }}
+                  style={{ width: 13, height: 13, cursor: "pointer" }}
+                />
+                Batch
+              </label>
+            </div>
+            {content.isBatch && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ fontSize: 11.5, color: COLORS.muted }}>How many made</div>
+                <input
+                  type="number" min="1" value={content.batchSize}
+                  onChange={(e) => {
+                    const size = Math.max(1, parseInt(e.target.value, 10) || 1);
+                    setContent((prev) => ({ ...prev, batchSize: size, units: resizeUnits(prev.units, size) }));
+                  }}
+                  style={{ ...fieldStyle, width: 60 }}
+                />
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {content.units.map((u, i) => (
+                <UnitRow
+                  key={u.id}
+                  label={content.isBatch ? `Unit ${i + 1}` : "This piece"}
+                  unit={u}
+                  accentHex={accentHex}
+                  fieldStyle={fieldStyle}
+                  onToggle={() => setContent((prev) => ({
+                    ...prev,
+                    units: prev.units.map((x) => (x.id !== u.id ? x : (x.sold ? { ...x, sold: false, soldDate: null } : { ...x, sold: true, soldDate: x.soldDate || appToday().toISOString().slice(0, 10) }))),
+                  }))}
+                  onDateChange={(value) => setContent((prev) => ({ ...prev, units: prev.units.map((x) => (x.id === u.id ? { ...x, soldDate: value } : x)) }))}
+                />
+              ))}
+            </div>
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={content.includeOnStoreCo} onChange={(e) => update("includeOnStoreCo", e.target.checked)} style={{ width: 14, height: 14, cursor: "pointer" }} />
+            Include on public storefront when connected
+          </label>
+        </div>
+      ) : (
+        <div>
+          <DetailRow label="Status" value={statusLabel} />
+          <DetailRow label="Listing name" value={content.name} />
+          <DetailRow label="Price" value={content.price ? `$${content.price}` : null} />
+          <DetailRow label="Dimensions" value={content.dimensions} />
+          <DetailRow label="Item weight" value={content.itemWeight} />
+          <DetailRow label="Shipping weight" value={content.shippingWeight} />
+          <DetailRow label="Materials" value={content.materials} />
+          <DetailRow label="SKU" value={content.sku} />
+          {content.colors.length > 0 && (
+            <DetailRow label="Color">
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {content.colors.map((c) => (
+                  <span key={c.id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.hex, border: `1px solid ${COLORS.hairline}`, flexShrink: 0 }} />
+                    <span style={{ fontWeight: 600 }}>{c.label || "—"}</span>
+                  </span>
+                ))}
+              </div>
+            </DetailRow>
+          )}
+          <DetailRow label="Description" value={content.description} />
+          {content.careTags.length > 0 && (
+            <DetailRow label="Tags">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {content.careTags.map((tag) => (
+                  <span key={tag} style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: RADIUS, border: `1px solid ${COLORS.hairline}`, color: COLORS.muted }}>{tag}</span>
+                ))}
+              </div>
+            </DetailRow>
+          )}
+          <DetailRow label="Notes" value={content.notes} />
+          <DetailRow label="Inventory" value={inventorySummary} />
+          <DetailRow label="StoreCo" value={content.includeOnStoreCo ? "Included" : "Not included"} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The reference mockup's photo grid, in place of the old primary-photo-plus-
+// filmstrip layout — same upload/remove/set-primary behavior underneath.
+function ProjectGallery({ projectId, content, setContent, viewport }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = React.useRef(null);
+
+  const handleFiles = async (fileList) => {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") || isHeicFile(f));
+    if (files.length === 0) return;
+    if (!storeUserId) {
+      setUploadError("Photo upload needs an active session — try refreshing the page.");
+      return;
+    }
+    setUploading(true);
+    setUploadError("");
+    const results = await Promise.allSettled(files.map(async (file, i) => {
+      const blob = await resizeImageFile(file, 1000);
+      const id = "photo-" + Date.now() + "-" + i + "-" + Math.random().toString(36).slice(2, 7);
+      const path = storeUserId + "/" + projectId + "/" + id + ".jpg";
+      const url = await uploadPhotoToStorage(blob, path);
+      return { id, url, path };
+    }));
+    const newPhotos = [];
+    const failed = [];
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") newPhotos.push(r.value);
+      else {
+        console.warn("MOA Studio: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
+        failed.push(files[i].name);
+      }
+    });
+    if (newPhotos.length) {
+      setContent((prev) => ({ ...prev, photos: [...prev.photos, ...newPhotos], primaryPhotoId: prev.primaryPhotoId || newPhotos[0].id }));
+    }
+    if (failed.length) setUploadError(`Couldn't read ${failed.join(", ")} — try exporting as JPEG or PNG and uploading again.`);
+    setUploading(false);
+  };
+
+  const removePhoto = (id) => {
+    const removed = content.photos.find((p) => p.id === id);
+    setContent((prev) => {
+      const photos = prev.photos.filter((p) => p.id !== id);
+      const primaryPhotoId = prev.primaryPhotoId === id ? (photos[0] ? photos[0].id : null) : prev.primaryPhotoId;
+      return { ...prev, photos, primaryPhotoId };
+    });
+    if (removed && removed.path) deletePhotoFromStorage(removed.path);
+  };
+
+  // Hero (primary) photo on the left; everything else fills a 2-wide grid to
+  // its right, two per row — once there are more than 4, later rows just
+  // continue stacking below rather than growing the hero. On phone widths the
+  // hero moves full-width on top instead, with secondaries flowing 2-up below
+  // it — three explicit columns get too narrow under a phone-width panel.
+  const phone = viewport && viewport.isPhone;
+  const primaryPhoto = content.photos.find((p) => p.id === content.primaryPhotoId) || content.photos[0];
+  const secondaryPhotos = content.photos.filter((p) => !primaryPhoto || p.id !== primaryPhoto.id);
+  const addTileIndex = secondaryPhotos.length;
+  const heroRow = primaryPhoto ? 2 : 1;
+  const gridPos = phone
+    ? (i) => ({ gridColumn: i % 2 === 0 ? "1" : "2", gridRow: Math.floor(i / 2) + heroRow })
+    : (i) => ({ gridColumn: i % 2 === 0 ? "2" : "3", gridRow: Math.floor(i / 2) + 1 });
+
+  return (
+    <div>
+      <SectionLabel>Gallery</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: phone ? "1fr 1fr" : "2fr 1fr 1fr", gap: 8, marginTop: 10 }}>
+        {primaryPhoto && (
+          <GalleryTile
+            photo={primaryPhoto}
+            isPrimary
+            onRemove={() => removePhoto(primaryPhoto.id)}
+            style={phone ? { gridColumn: "1 / span 2", gridRow: "1", aspectRatio: "3 / 2" } : { gridColumn: "1", gridRow: "1 / span 2" }}
+          />
+        )}
+        {secondaryPhotos.map((p, i) => (
+          <GalleryTile
+            key={p.id}
+            photo={p}
+            onClick={() => setContent((prev) => ({ ...prev, primaryPhotoId: p.id }))}
+            onRemove={() => removePhoto(p.id)}
+            style={{ ...gridPos(i), aspectRatio: "1 / 1" }}
+          />
+        ))}
+        <button
+          onClick={() => fileInputRef.current && fileInputRef.current.click()}
+          disabled={uploading}
+          style={{
+            ...(primaryPhoto ? gridPos(addTileIndex) : { gridColumn: "1", gridRow: "1" }),
+            aspectRatio: "1 / 1", borderRadius: RADIUS, border: `1px dashed ${COLORS.hairline}`,
+            background: "none", color: COLORS.muted, cursor: uploading ? "default" : "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, fontFamily: "inherit",
+          }}
+        >
+          <span style={{ fontSize: 20, lineHeight: 1 }}>{uploading ? "…" : "+"}</span>
+          {!uploading && <span style={{ fontSize: 10.5, fontWeight: 600 }}>Add photo</span>}
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*,.heic,.heif" multiple onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+      </div>
+      {uploadError && <div style={{ fontSize: 11.5, color: COLORS.tomato, marginTop: 8 }}>{uploadError}</div>}
+    </div>
+  );
+}
+
+function GalleryTile({ photo, isPrimary, onClick, onRemove, style }) {
+  return (
+    <div style={{ position: "relative", ...style }}>
+      <img
+        src={photo.url}
+        alt="Project photo"
+        onClick={onClick}
+        title={isPrimary ? "Primary photo" : "Click to set as primary"}
+        style={{
+          width: "100%", height: "100%", objectFit: "cover", borderRadius: RADIUS, cursor: onClick ? "pointer" : "default", display: "block",
+          border: `1px solid ${COLORS.hairline}`,
+        }}
+      />
+      <button
+        onClick={onRemove}
+        title="Remove photo"
+        style={{
+          position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
+          background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.paper}`,
+          fontSize: 11, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function ProjectDashboard({ project, projects, setProjects, tasks, boardContent, setBoardContent, contentLibrary, setContentLibrary, onBack, onOpenBoard, onSwitchProject }) {
+  const viewport = useViewport();
+  const [editingPriority, setEditingPriority] = useState(false);
+  if (!project) return null;
+  const a = PROJECT_ACCENTS[project.accentIdx];
+  const meta = PROJECT_META[project.id] || {};
+  // Live edits on the project itself take precedence over the seed metadata —
+  // same precedence Project View already uses, so editing priority from either
+  // screen shows up consistently on both.
+  const priority = project.priority || meta.priority || "—";
+  const updatePriority = (value) => {
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, priority: value } : p)));
+    setEditingPriority(false);
   };
   const pTasks = tasks.filter((t) => t.projectId === project.id);
   const completedCount = pTasks.filter((t) => t.completed).length;
@@ -4232,141 +4728,96 @@ function ProjectDashboard({ project, setProjects, tasks, onBack, onOpenBoard, on
 
   const status = totalCount === 0 ? "Not Started" : completedCount === totalCount ? "Completed" : completedCount > 0 ? "In Progress" : "Not Started";
 
+  const productKey = project.id + ":product";
+  const productContent = normalizeProduct(boardContent[productKey]);
+  const setProductContent = (updater) => setBoardContent((prev) => {
+    const current = normalizeProduct(prev[productKey]);
+    const next = typeof updater === "function" ? updater(current) : updater;
+    return { ...prev, [productKey]: next };
+  });
+
   return (
     <div style={{ padding: viewport.isPhone ? "22px 16px 48px" : viewport.isTablet ? "28px 22px 56px" : "32px 32px 64px" }}>
-      {/* Header block */}
-      <div style={{ borderLeft: `4px solid ${a.hex}`, paddingLeft: 18, marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "0.01em", margin: 0, display: "flex", alignItems: "center", gap: 12 }}>
-            <ProjectIcon icon={project.icon} color={a.hex} size={24} />
-            {editingName ? (
-              <input
-                autoFocus
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onBlur={commitName}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitName();
-                  if (e.key === "Escape") setEditingName(false);
-                }}
-                style={{
-                  fontSize: 22,
-                  fontWeight: 700,
-                  letterSpacing: "0.01em",
-                  fontFamily: "inherit",
-                  color: COLORS.ink,
-                  background: COLORS.cream,
-                  border: `1px solid ${COLORS.hairline}`,
-                  borderRadius: RADIUS,
-                  padding: "2px 8px",
-                  minWidth: 160,
-                }}
-              />
-            ) : (
-              <span onClick={startEditingName} style={{ cursor: "text" }} title="Click to rename">
-                {project.name}
-              </span>
-            )}
-          </h1>
+      <ProjectScreenHeader
+        project={project}
+        projects={projects}
+        setProjects={setProjects}
+        activeTab="overview"
+        onBack={onBack}
+        onSwitchTab={(key) => key !== "overview" && onOpenBoard(project.id, key)}
+        onSwitchProject={onSwitchProject}
+        statusLabel={
           <span style={{ fontSize: 10.5, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{status}</span>
-        </div>
-        {meta.description && (
-          <p style={{ fontSize: 13.5, color: COLORS.muted, marginTop: 8, marginBottom: 0, maxWidth: 560, lineHeight: 1.5 }}>{meta.description}</p>
-        )}
-      </div>
+        }
+        subtitle={
+          meta.description ? (
+            <p style={{ fontSize: 13.5, color: COLORS.muted, marginTop: 8, marginBottom: 0, maxWidth: 560, lineHeight: 1.5 }}>{meta.description}</p>
+          ) : null
+        }
+      />
 
-      {/* Product Details — the final-listing spec sheet, separate from the 8
-          pipeline boards since it isn't a stage, it's a persistent record. */}
-      <div
-        onClick={() => onOpenProduct(project.id)}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-          background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderLeft: `4px solid ${a.hex}`,
-          borderRadius: RADIUS, padding: "14px 18px", marginBottom: 24, cursor: "pointer",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>Product details</div>
-          <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 2 }}>
-            Final specs for selling this piece — photos, dimensions, price, care notes
+      {/* Same bordered, accent-topped card every board uses (see BoardScreen)
+          so the Overview tab flips against the other six without the page
+          shell changing shape — only the content inside the card differs. */}
+      <div style={{ borderTop: `3px solid ${a.hex}`, background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden" }}>
+        <div style={{ padding: "24px 28px" }}>
+          {/* Metrics row */}
+          <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 1, background: COLORS.hairline, border: `1px solid ${COLORS.hairline}`, marginBottom: 28 }}>
+            <MetricCell
+              label="Progress"
+              value={`${pct}%`}
+              barPct={pct}
+              barColor={a.hex}
+              sub={`${craftCompleted} of ${craftTasks.length} craft tasks  |  ${contentCompleted} of ${contentTasks.length} content tasks`}
+            />
+            <MetricCell label="Target post date" value={meta.targetPostDate ? fmtDate(meta.targetPostDate) : "—"} sub={meta.targetPostDate ? null : "Not set"} />
+            <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
+              <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Priority</div>
+              {editingPriority ? (
+                <select
+                  autoFocus
+                  value={project.priority || ""}
+                  onChange={(e) => updatePriority(e.target.value)}
+                  onBlur={() => setEditingPriority(false)}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    background: COLORS.cream,
+                    border: `1px solid ${COLORS.hairline}`,
+                    borderRadius: RADIUS,
+                    padding: "3px 6px",
+                    fontFamily: "inherit",
+                    color: COLORS.ink,
+                  }}
+                >
+                  <option value="">—</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              ) : (
+                <div onClick={() => setEditingPriority(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{priority}</div>
+              )}
+            </div>
+            <MetricCell label="Est. materials" value={meta.budget ? `$${meta.budget}` : "—"} />
           </div>
-        </div>
-        <span style={{ fontSize: 18, color: COLORS.muted }}>→</span>
-      </div>
 
-      {/* Metrics row */}
-      <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 1, background: COLORS.hairline, border: `1px solid ${COLORS.hairline}`, marginBottom: 28 }}>
-        <MetricCell
-          label="Completed progress"
-          value={`${pct}%`}
-          sub={`${craftCompleted} of ${craftTasks.length} craft tasks  |  ${contentCompleted} of ${contentTasks.length} content tasks`}
-        />
-        <MetricCell label="Target post date" value={meta.targetPostDate ? fmtDate(meta.targetPostDate) : "—"} sub={meta.targetPostDate ? null : "Not set"} />
-        <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
-          <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Priority</div>
-          {editingPriority ? (
-            <select
-              autoFocus
-              value={project.priority || ""}
-              onChange={(e) => updatePriority(e.target.value)}
-              onBlur={() => setEditingPriority(false)}
-              style={{
-                fontSize: 15,
-                fontWeight: 700,
-                background: COLORS.cream,
-                border: `1px solid ${COLORS.hairline}`,
-                borderRadius: RADIUS,
-                padding: "3px 6px",
-                fontFamily: "inherit",
-                color: COLORS.ink,
-              }}
-            >
-              <option value="">—</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          ) : (
-            <div onClick={() => setEditingPriority(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{priority}</div>
-          )}
-        </div>
-        <MetricCell label="Est. materials" value={meta.budget ? `$${meta.budget}` : "—"} />
-      </div>
+          {/* Three-column: details, gallery, this week / upcoming — the
+              numbered "Boards" grid that used to live here is gone now that
+              the tab strip in the header covers that navigation. */}
+          <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1.15fr 0.85fr", gap: 28, alignItems: "start" }}>
+            <ProjectDetailsPanel content={productContent} setContent={setProductContent} accentHex={a.hex} projectId={project.id} contentLibrary={contentLibrary} setContentLibrary={setContentLibrary} />
+            <ProjectGallery projectId={project.id} content={productContent} setContent={setProductContent} viewport={viewport} />
 
-      {/* Two-column: boards nav + this week / upcoming */}
-      <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1.3fr 1fr", gap: 24, alignItems: "start" }}>
-        <div>
-          <SectionLabel>Boards</SectionLabel>
-          <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "repeat(2, 1fr)", gap: 8, marginTop: 10 }}>
-            {BOARD_STAGES.map((b, i) => (
-              <div
-                key={b.key}
-                onClick={() => onOpenBoard(project.id, b.key)}
-                style={{
-                  background: COLORS.paper,
-                  border: `1px solid ${COLORS.hairline}`,
-                  borderRadius: RADIUS,
-                  padding: "13px 14px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-                <span style={{ fontSize: 10.5, color: COLORS.royalBlue, fontWeight: 700, minWidth: 16 }}>{String(i + 1).padStart(2, "0")}</span>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{b.label}</span>
+            <div>
+              <SectionLabel>This week</SectionLabel>
+              <TaskMiniList items={thisWeekTasks} accentHex={a.hex} empty="Nothing scheduled this week" />
+
+              <div style={{ marginTop: 22 }}>
+                <SectionLabel>Upcoming</SectionLabel>
+                <TaskMiniList items={upcomingTasks} accentHex={a.hex} empty="Nothing scheduled yet" />
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <SectionLabel>This week</SectionLabel>
-          <TaskMiniList items={thisWeekTasks} accentHex={a.hex} empty="Nothing scheduled this week" />
-
-          <div style={{ marginTop: 22 }}>
-            <SectionLabel>Upcoming</SectionLabel>
-            <TaskMiniList items={upcomingTasks} accentHex={a.hex} empty="Nothing scheduled yet" />
+            </div>
           </div>
         </div>
       </div>
@@ -4374,11 +4825,16 @@ function ProjectDashboard({ project, setProjects, tasks, onBack, onOpenBoard, on
   );
 }
 
-function MetricCell({ label, value, sub }) {
+function MetricCell({ label, value, sub, barPct, barColor }) {
   return (
     <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
       <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 19, fontWeight: 700, color: COLORS.tomato }}>{value}</div>
+      {barPct != null && (
+        <div style={{ height: 5, background: COLORS.hairline, borderRadius: 3, overflow: "hidden", marginTop: 8 }}>
+          <div style={{ width: `${barPct}%`, height: "100%", background: barColor || COLORS.cobalt, borderRadius: 3 }} />
+        </div>
+      )}
       {sub && <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 3 }}>{sub}</div>}
     </div>
   );
@@ -4482,400 +4938,14 @@ async function deletePhotoFromStorage(path) {
       body: JSON.stringify({ prefixes: [path] }),
     });
   } catch (e) {
-    console.warn("StudioCo: could not delete photo from storage", path, e);
+    console.warn("MOA Studio: could not delete photo from storage", path, e);
   }
-}
-
-function ProductPage({ project, content, setContent, onBack }) {
-  const viewport = useViewport();
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const fileInputRef = React.useRef(null);
-  if (!project) return null;
-  const a = PROJECT_ACCENTS[project.accentIdx];
-  const displayName = content.name || project.name;
-
-  const update = (field, value) => setContent((prev) => ({ ...prev, [field]: value }));
-
-  const handleFiles = async (fileList) => {
-    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") || isHeicFile(f));
-    if (files.length === 0) return;
-    if (!storeUserId) {
-      setUploadError("Photo upload needs an active session — try refreshing the page.");
-      return;
-    }
-    setUploading(true);
-    setUploadError("");
-    // Each file processed independently so one bad photo doesn't lose the
-    // rest of the batch — whatever succeeds gets saved, failures are reported.
-    const results = await Promise.allSettled(files.map(async (file, i) => {
-      const blob = await resizeImageFile(file, 1000);
-      const id = "photo-" + Date.now() + "-" + i + "-" + Math.random().toString(36).slice(2, 7);
-      const path = storeUserId + "/" + project.id + "/" + id + ".jpg";
-      const url = await uploadPhotoToStorage(blob, path);
-      return { id, url, path };
-    }));
-    const newPhotos = [];
-    const failed = [];
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        newPhotos.push(r.value);
-      } else {
-        console.warn("StudioCo: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
-        failed.push(files[i].name);
-      }
-    });
-    if (newPhotos.length) {
-      setContent((prev) => ({
-        ...prev,
-        photos: [...prev.photos, ...newPhotos],
-        primaryPhotoId: prev.primaryPhotoId || newPhotos[0].id,
-      }));
-    }
-    if (failed.length) {
-      setUploadError(`Couldn't read ${failed.join(", ")} — try exporting as JPEG or PNG and uploading again.`);
-    }
-    setUploading(false);
-  };
-
-  const removePhoto = (id) => {
-    const removed = content.photos.find((p) => p.id === id);
-    setContent((prev) => {
-      const photos = prev.photos.filter((p) => p.id !== id);
-      const primaryPhotoId = prev.primaryPhotoId === id ? (photos[0] ? photos[0].id : null) : prev.primaryPhotoId;
-      return { ...prev, photos, primaryPhotoId };
-    });
-    if (removed && removed.path) deletePhotoFromStorage(removed.path);
-  };
-
-  const toggleCareTag = (tag) => {
-    setContent((prev) => ({
-      ...prev,
-      careTags: prev.careTags.includes(tag) ? prev.careTags.filter((t) => t !== tag) : [...prev.careTags, tag],
-    }));
-  };
-
-  const addColor = () => {
-    setContent((prev) => ({
-      ...prev,
-      colors: [...prev.colors, { id: "color-" + Date.now(), hex: PROJECT_ACCENTS[0].hex, label: "" }],
-    }));
-  };
-  const updateColor = (id, field, value) => {
-    setContent((prev) => ({
-      ...prev,
-      colors: prev.colors.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
-    }));
-  };
-  const removeColor = (id) => setContent((prev) => ({ ...prev, colors: prev.colors.filter((c) => c.id !== id) }));
-
-  const fieldStyle = {
-    background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS,
-    padding: "8px 10px", fontSize: 13, fontFamily: "inherit", color: COLORS.ink, width: "100%",
-  };
-  const labelStyle = { fontSize: 10, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 };
-  const sectionStyle = { background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: 18, marginBottom: 16 };
-
-  const primaryPhoto = content.photos.find((p) => p.id === content.primaryPhotoId) || content.photos[0];
-
-  return (
-    <div style={{ padding: viewport.isPhone ? "20px 16px 48px" : viewport.isTablet ? "24px 22px 56px" : "28px 32px 64px", maxWidth: 920 }}>
-      <div style={{ borderLeft: `4px solid ${a.hex}`, paddingLeft: 18, marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 21, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <ProjectIcon icon={project.icon} color={a.hex} size={22} />
-            Product details
-          </h1>
-          <div style={{ fontSize: 12.5, color: COLORS.muted, marginTop: 4 }}>{project.name}</div>
-        </div>
-        <button
-          onClick={onBack}
-          style={{ background: "none", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "7px 14px", fontSize: 12, fontWeight: 600, fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}
-        >
-          ← Back to project
-        </button>
-      </div>
-
-      {/* Photos */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Photos</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
-          {primaryPhoto && (
-            <div style={{ width: 160, height: 160, borderRadius: RADIUS, overflow: "hidden", border: `1px solid ${COLORS.hairline}`, flexShrink: 0 }}>
-              <img src={primaryPhoto.url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            </div>
-          )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignContent: "flex-start", flex: 1, minWidth: 200 }}>
-            {content.photos.map((p) => (
-              <div key={p.id} style={{ position: "relative", width: 64, height: 64 }}>
-                <img
-                  src={p.url}
-                  onClick={() => update("primaryPhotoId", p.id)}
-                  title={p.id === content.primaryPhotoId ? "Primary photo" : "Click to set as primary"}
-                  style={{
-                    width: "100%", height: "100%", objectFit: "cover", borderRadius: RADIUS, cursor: "pointer",
-                    border: p.id === content.primaryPhotoId ? `2px solid ${a.hex}` : `1px solid ${COLORS.hairline}`,
-                  }}
-                />
-                <button
-                  onClick={() => removePhoto(p.id)}
-                  title="Remove photo"
-                  style={{
-                    position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
-                    background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.paper}`,
-                    fontSize: 11, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => fileInputRef.current && fileInputRef.current.click()}
-              disabled={uploading}
-              style={{
-                width: 64, height: 64, borderRadius: RADIUS, border: `1px dashed ${COLORS.hairline}`,
-                background: "none", color: COLORS.muted, fontSize: 20, cursor: uploading ? "default" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit",
-              }}
-            >
-              {uploading ? "…" : "+"}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.heic,.heif"
-              multiple
-              onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
-              style={{ display: "none" }}
-            />
-          </div>
-        </div>
-        {content.photos.length === 0 && !uploadError && (
-          <div style={{ fontSize: 11.5, color: COLORS.muted, marginTop: 8, fontStyle: "italic" }}>No photos yet — click + to add some.</div>
-        )}
-        {uploadError && (
-          <div style={{ fontSize: 11.5, color: COLORS.tomato, marginTop: 8 }}>{uploadError}</div>
-        )}
-      </div>
-
-      {/* Core details */}
-      <div style={sectionStyle}>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 14 }}>
-          <div>
-            <div style={labelStyle}>Name</div>
-            <input value={content.name} onChange={(e) => update("name", e.target.value)} placeholder={project.name} style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Price</div>
-            <input
-              type="number" min="0" step="0.01"
-              value={content.price}
-              onChange={(e) => update("price", e.target.value)}
-              placeholder="0.00"
-              style={fieldStyle}
-            />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr 1fr", gap: 14, marginBottom: 14 }}>
-          <div>
-            <div style={labelStyle}>Dimensions</div>
-            <input value={content.dimensions} onChange={(e) => update("dimensions", e.target.value)} placeholder={'e.g. 6" tall x 4" wide'} style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Item weight</div>
-            <input value={content.itemWeight} onChange={(e) => update("itemWeight", e.target.value)} placeholder="e.g. 1.2 lb" style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>Packaged / shipping weight</div>
-            <input value={content.shippingWeight} onChange={(e) => update("shippingWeight", e.target.value)} placeholder="e.g. 2.5 lb" style={fieldStyle} />
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr", gap: 14 }}>
-          <div>
-            <div style={labelStyle}>Materials</div>
-            <input value={content.materials} onChange={(e) => update("materials", e.target.value)} placeholder="e.g. Stoneware, celadon glaze" style={fieldStyle} />
-          </div>
-          <div>
-            <div style={labelStyle}>SKU</div>
-            <input value={content.sku} onChange={(e) => update("sku", e.target.value)} placeholder={project.id} style={fieldStyle} />
-          </div>
-        </div>
-      </div>
-
-      {/* Color */}
-      <div style={sectionStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={labelStyle}>Color</div>
-          <button
-            onClick={addColor}
-            style={{ background: "none", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "3px 10px", fontSize: 11, fontWeight: 600, fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}
-          >
-            + Add color
-          </button>
-        </div>
-        {content.colors.length === 0 && (
-          <div style={{ fontSize: 11.5, color: COLORS.muted, fontStyle: "italic" }}>No colors added yet.</div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {content.colors.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <ColorPickerPopover value={c.hex} onChange={(hex) => updateColor(c.id, "hex", hex)} />
-              <input
-                value={c.label}
-                onChange={(e) => updateColor(c.id, "label", e.target.value)}
-                placeholder="e.g. Celadon green"
-                style={{ ...fieldStyle, flex: 1 }}
-              />
-              <button
-                onClick={() => removeColor(c.id)}
-                title="Remove color"
-                style={{ background: "none", border: "none", color: COLORS.muted, cursor: "pointer", fontSize: 15, padding: 4 }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Care & safety */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Care & safety</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, marginBottom: 14 }}>
-          {CARE_TAG_OPTIONS.map((tag) => {
-            const active = content.careTags.includes(tag);
-            return (
-              <button
-                key={tag}
-                onClick={() => toggleCareTag(tag)}
-                style={{
-                  fontFamily: "inherit", fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: RADIUS, cursor: "pointer",
-                  background: active ? COLORS.ink : "none", color: active ? COLORS.paper : COLORS.muted,
-                  border: `1px solid ${active ? COLORS.ink : COLORS.hairline}`,
-                }}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-        <div style={labelStyle}>Other notes</div>
-        <textarea
-          value={content.notes}
-          onChange={(e) => update("notes", e.target.value)}
-          placeholder="Anything else a buyer should know — care quirks, fragility, one-of-a-kind variation…"
-          style={{ ...fieldStyle, minHeight: 60, resize: "vertical", marginTop: 5 }}
-        />
-      </div>
-
-      {/* Listing copy */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Listing description</div>
-        <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 6 }}>The story/marketing copy that appears on StoreCo and in listings.</div>
-        <textarea
-          value={content.description}
-          onChange={(e) => update("description", e.target.value)}
-          placeholder="A sentence or two about this piece…"
-          style={{ ...fieldStyle, minHeight: 80, resize: "vertical" }}
-        />
-      </div>
-
-      {/* Inventory — the one place quantity/sold state lives. Sales board
-          reads and mirrors this rather than keeping its own counter. */}
-      <div style={sectionStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={labelStyle}>Inventory</div>
-          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={content.isBatch}
-              onChange={(e) => {
-                const isBatch = e.target.checked;
-                setContent((prev) => {
-                  const size = isBatch ? Math.max(2, prev.batchSize) : 1;
-                  return { ...prev, isBatch, batchSize: size, units: resizeUnits(prev.units, size) };
-                });
-              }}
-              style={{ width: 14, height: 14, cursor: "pointer" }}
-            />
-            This is a batch of identical pieces
-          </label>
-        </div>
-
-        {content.isBatch && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: COLORS.muted }}>How many were made</div>
-            <input
-              type="number" min="1"
-              value={content.batchSize}
-              onChange={(e) => {
-                const size = Math.max(1, parseInt(e.target.value, 10) || 1);
-                setContent((prev) => ({ ...prev, batchSize: size, units: resizeUnits(prev.units, size) }));
-              }}
-              style={{ ...fieldStyle, width: 70 }}
-            />
-          </div>
-        )}
-
-        {content.isBatch && (
-          <div style={{ fontSize: 11.5, color: COLORS.muted, marginBottom: 10 }}>
-            {content.units.filter((u) => u.sold).length} of {content.units.length} sold
-          </div>
-        )}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {content.units.map((u, i) => (
-            <UnitRow
-              key={u.id}
-              label={content.isBatch ? `Unit ${i + 1}` : "This piece"}
-              unit={u}
-              accentHex={a.hex}
-              fieldStyle={fieldStyle}
-              onToggle={() => setContent((prev) => ({
-                ...prev,
-                units: prev.units.map((x) => x.id !== u.id ? x : (
-                  x.sold ? { ...x, sold: false, soldDate: null } : { ...x, sold: true, soldDate: x.soldDate || appToday().toISOString().slice(0, 10) }
-                )),
-              }))}
-              onDateChange={(value) => setContent((prev) => ({
-                ...prev,
-                units: prev.units.map((x) => x.id === u.id ? { ...x, soldDate: value } : x),
-              }))}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Status */}
-      <div style={sectionStyle}>
-        <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "1fr" : "1fr 1fr", gap: 14, alignItems: "start" }}>
-          <div>
-            <div style={labelStyle}>Status</div>
-            <select value={content.status} onChange={(e) => update("status", e.target.value)} style={{ ...fieldStyle, cursor: "pointer" }}>
-              {PRODUCT_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={labelStyle}>StoreCo</div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer", marginTop: 8 }}>
-              <input
-                type="checkbox"
-                checked={content.includeOnStoreCo}
-                onChange={(e) => update("includeOnStoreCo", e.target.checked)}
-                style={{ width: 15, height: 15, cursor: "pointer" }}
-              />
-              Include on public storefront when connected
-            </label>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // A single trackable unit — used for both single pieces (one row) and each
 // unit in a batch, so there's exactly one implementation of "mark sold".
+// Reused by ProjectDetailsPanel (Overview tab) — this used to also back a
+// standalone Product page, since folded into Overview directly.
 function UnitRow({ label, unit, accentHex, fieldStyle, onToggle, onDateChange }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, background: COLORS.cream }}>
@@ -4903,53 +4973,25 @@ function UnitRow({ label, unit, accentHex, fieldStyle, onToggle, onDateChange })
 }
 
 /* ============ BOARD SCREEN (shared shell for all 8 pipeline boards) ============ */
-function BoardScreen({ projectId, boardKey, projects, onBack, onSwitchProject, onSwitchBoard, onOpenProduct, boardContent, setBoardContent, tasks, setTasks, contentLibrary, setContentLibrary, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
+function BoardScreen({ projectId, boardKey, projects, setProjects, onBack, onGoOverview, onSwitchProject, onSwitchBoard, onOpenProduct, boardContent, setBoardContent, tasks, setTasks, contentLibrary, setContentLibrary, campaignLibrary, setCampaignLibrary, contacts, setContacts }) {
   const project = projects.find((p) => p.id === projectId);
   const board = BOARD_STAGES.find((b) => b.key === boardKey);
+  const viewport = useViewport();
   if (!project || !board) return null;
-  const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name));
   const a = PROJECT_ACCENTS[project.accentIdx];
   const contentKey = projectId + ":" + boardKey;
 
   return (
-    <div style={{ padding: "28px 32px 64px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <FilterDropdown
-          label="Board"
-          value={boardKey}
-          onChange={onSwitchBoard}
-          options={BOARD_STAGES.map((b) => b.key)}
-          renderOption={(key) => {
-            const idx = BOARD_STAGES.findIndex((b) => b.key === key);
-            return String(idx + 1).padStart(2, "0") + " " + BOARD_STAGES[idx].label;
-          }}
-        />
-
-        <div style={{ position: "relative" }}>
-          <select
-            value={projectId}
-            onChange={(e) => onSwitchProject(e.target.value)}
-            style={{
-              background: COLORS.paper,
-              border: `1px solid ${COLORS.ink}`,
-              borderRadius: RADIUS,
-              padding: "7px 30px 7px 12px",
-              fontSize: 13,
-              fontFamily: "inherit",
-              fontWeight: 700,
-              color: COLORS.ink,
-              cursor: "pointer",
-              appearance: "none",
-              WebkitAppearance: "none",
-            }}
-          >
-            {sortedProjects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <DropdownArrow />
-        </div>
-      </div>
+    <div style={{ padding: viewport.isPhone ? "22px 16px 48px" : viewport.isTablet ? "28px 22px 56px" : "32px 32px 64px" }}>
+      <ProjectScreenHeader
+        project={project}
+        projects={projects}
+        setProjects={setProjects}
+        activeTab={boardKey}
+        onBack={onBack}
+        onSwitchTab={(key) => (key === "overview" ? onGoOverview() : onSwitchBoard(key))}
+        onSwitchProject={onSwitchProject}
+      />
 
       <div style={{ borderTop: `3px solid ${a.hex}`, background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden" }}>
         {boardKey === "planning" ? (
@@ -5851,7 +5893,7 @@ function SalesBoard({ boardData, setBoardData, contentPieces, project, accentHex
   );
 }
 
-/* ---------- Learnings ----------
+/* ---------- Notes (formerly "Learnings") ----------
    The last of the 8 pipeline boards. Kept deliberately simple — a single
    free-text note, autosaved on every keystroke like the rest of the app's
    fields — rather than a structured retro template, per direct instruction. */
@@ -5859,7 +5901,7 @@ function LearningsBoard({ boardData, setBoardData }) {
   const notes = boardData.notes || "";
   return (
     <div style={{ padding: "24px 28px" }}>
-      <SectionLabel>Learnings</SectionLabel>
+      <SectionLabel>Notes</SectionLabel>
       <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 8, marginBottom: 14, lineHeight: 1.5, maxWidth: 560 }}>
         What worked, what didn't, what you'd do differently next time — jot it down while it's fresh.
       </div>
@@ -6228,9 +6270,10 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
   const labelStyle = { fontSize: 9.5, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 };
   const displayTitle = (listing.title && listing.title.trim()) || "Untitled listing";
 
-  // Quantity/sold are no longer edited here — the Product page is the one
-  // source of truth for physical inventory (the same pieces might be listed
-  // on several platforms at once, so there's only ever one real count).
+  // Quantity/sold are no longer edited here — the Overview tab's Details
+  // panel is the one source of truth for physical inventory (the same
+  // pieces might be listed on several platforms at once, so there's only
+  // ever one real count).
   // We still mirror the derived numbers into listing.quantity/sales so the
   // Analytics dashboard, which reads those fields directly, keeps working
   // without needing its own copy of this logic.
@@ -6360,7 +6403,7 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
             </div>
             <div>
               <div style={labelStyle}>Quantity</div>
-              <div style={{ ...fieldStyle, background: "none", color: COLORS.muted, display: "flex", alignItems: "center" }} title="Set on the Product page">{qty}</div>
+              <div style={{ ...fieldStyle, background: "none", color: COLORS.muted, display: "flex", alignItems: "center" }} title="Set in the project's Overview Details panel">{qty}</div>
             </div>
             <div>
               <div style={labelStyle}>Revenue</div>
@@ -6370,7 +6413,7 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
 
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <div style={labelStyle}>Sold — {sold} of {qty} <span style={{ textTransform: "none", fontWeight: 400 }}>(synced from Product page)</span></div>
+              <div style={labelStyle}>Sold — {sold} of {qty} <span style={{ textTransform: "none", fontWeight: 400 }}>(synced from Overview)</span></div>
               {onOpenProduct && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onOpenProduct(); }}
@@ -6402,7 +6445,7 @@ function ListingCard({ listing, isExpanded, onToggle, onUpdate, onRemove, conten
   );
 }
 
-/* ---------- Inspiration and Planning Board ---------- */
+/* ---------- Plan Board (formerly "Inspiration and Planning") ---------- */
 function PlanningBoard({ content, setContent, accentHex }) {
   const canvasItems = content.canvasItems || [];
   const ideas = content.ideas || [];
@@ -7108,7 +7151,7 @@ function ContentBoard({ boardData, setBoardData, allTasks, setAllTasks, currentP
   };
 
   const addPiece = () => {
-    const newPiece = { id: "piece-" + Date.now(), title: "", series: "", episode: "", type: "", platform: "", trend: "", music: "", voiceover: "", caption: "", notes: "" };
+    const newPiece = { id: "piece-" + Date.now(), title: "", series: "", episode: "", type: "", platforms: [], trend: "", music: "", voiceover: "", caption: "", notes: "" };
     setBoardData((prev) => ({ ...prev, pieces: [...(prev.pieces || []), newPiece] }));
     setJustAddedId(newPiece.id);
   };
@@ -7315,12 +7358,12 @@ function ContentPieceForm({ piece, onUpdate, contentLibrary, setContentLibrary }
         </div>
         <div>
           <div style={labelStyle}>Platform</div>
-          <LibraryPickerField
-            value={piece.platform}
-            onChange={(val) => onUpdate("platform", val)}
+          <MultiLibraryPickerField
+            value={piecePlatforms(piece)}
+            onChange={(val) => onUpdate("platforms", val)}
             options={contentLibrary.platforms}
             onAddOption={(val) => setContentLibrary((prev) => ({ ...prev, platforms: [...prev.platforms, val] }))}
-            placeholder="Select platform…"
+            placeholder="No platforms in library yet — add one"
           />
         </div>
         <div>
@@ -7424,6 +7467,77 @@ function LibraryPickerField({ value, onChange, options, onAddOption, placeholder
   );
 }
 
+// Multi-select sibling of LibraryPickerField — toggle pills instead of a
+// single dropdown (a dropdown can't show more than one selection cleanly),
+// plus the same inline "+ Add new…" library-growing affordance. Same
+// toggle-pill language as ProjectDetailsPanel's care-tag picker.
+function MultiLibraryPickerField({ value, onChange, options, onAddOption, placeholder, addLabel }) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const selected = value || [];
+
+  const toggle = (opt) => {
+    onChange(selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt]);
+  };
+
+  const commitNew = () => {
+    const val = draft.trim();
+    if (val) {
+      if (!options.includes(val)) onAddOption(val);
+      if (!selected.includes(val)) onChange([...selected, val]);
+    }
+    setAdding(false);
+    setDraft("");
+  };
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 7, alignItems: "center" }}>
+      {options.length === 0 && !adding && (
+        <span style={{ fontSize: 12, color: COLORS.muted, fontStyle: "italic" }}>{placeholder}</span>
+      )}
+      {options.map((opt) => {
+        const active = selected.includes(opt);
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            style={{
+              fontFamily: "inherit", fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: RADIUS, cursor: "pointer",
+              background: active ? COLORS.ink : "none", color: active ? COLORS.paper : COLORS.muted,
+              border: `1px solid ${active ? COLORS.ink : COLORS.hairline}`,
+            }}
+          >
+            {opt}
+          </button>
+        );
+      })}
+      {adding ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitNew}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitNew();
+            if (e.key === "Escape") { setAdding(false); setDraft(""); }
+          }}
+          placeholder="New value…"
+          style={{ background: COLORS.cream, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, padding: "6px 10px", fontSize: 11.5, fontFamily: "inherit", color: COLORS.ink, width: 110 }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: RADIUS, cursor: "pointer", background: "none", color: COLORS.muted, border: `1px dashed ${COLORS.hairline}` }}
+        >
+          {addLabel || "+ Add new…"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ToolButton({ active, onClick, title, children }) {
   return (
     <button
@@ -7448,7 +7562,7 @@ function ToolButton({ active, onClick, title, children }) {
 }
 
 /* ---------- Auth screens ----------
-   Public face of StudioCo. Deliberately in the same editorial language as the
+   Public face of MOA Studio. Deliberately in the same editorial language as the
    app itself — Inter, 3px radius, cream paper, one accent — so signing in
    doesn't feel like a different product from the studio behind it. */
 function AuthShell({ children, maxWidth }) {
@@ -7459,47 +7573,516 @@ function AuthShell({ children, maxWidth }) {
   );
 }
 
-function LandingScreen({ onLogIn, onSignUp }) {
+/* ---------- Landing page ----------
+   Public face of MOA Studio, and the only screen a signed-out visitor sees.
+   Built in the app's own language — Inter, 3px radius, cream paper, the five
+   accent hues, vessel silhouettes for every icon — rather than a separate
+   marketing style, so signing in doesn't feel like a different product.
+
+   Always renders light: `data-theme` is only set inside StudioApp, so nothing
+   here is reached with the dark palette applied.
+
+   Two stacked halves, per Jenny's call: the original short landing copy at the
+   top spread across the full width, then the fuller marketing page underneath.
+
+   Section identity is carried exactly the way project identity is everywhere
+   else — an accent-colored label plus a vessel silhouette — never a tinted
+   fill. The bands alternate between the two existing surface tokens only, so
+   this page introduces no color the palette doesn't already have. */
+const LANDING_SECTION_MARKS = [
+  { key: "hub", icon: "ti-stack-2", title: "Project Hub",
+    desc: "Organize all of your projects from idea to finished piece." },
+  { key: "schedule", icon: "ti-calendar-month", title: "Studio Schedule",
+    desc: "See today’s tasks and plan ahead without leaving the bench." },
+  { key: "marketing", icon: "ti-photo", title: "Content & Marketing",
+    desc: "Plan, schedule, and track content that showcases your work and grows your audience." },
+  { key: "inventory", icon: "ti-box", title: "Inventory & Sales",
+    desc: "Know what’s finished, what’s in progress, and what’s ready to sell." },
+  { key: "analytics", icon: "ti-chart-bar", title: "Analytics",
+    desc: "Understand what’s working and make smarter creative decisions." },
+];
+
+/* Gallery tiles in the project mock. */
+const galleryTile = { background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" };
+const galleryImg = { width: "100%", height: "100%", objectFit: "cover", display: "block" };
+
+/* Waitlist band geometry. The photograph is sized off the band rather than
+   given a fixed height — see the note where it's rendered. */
+const LANDING_BAND_PAD_Y = 44;
+const LANDING_VASE_COL = 380; // column reserved for the photograph
+
+/* The waitlist CTA is deliberately a dark card sitting on a light page, so it
+   can't read COLORS.* — those resolve to light values on this always-light
+   screen. These mirror the [data-theme="dark"] tokens in <style> by value;
+   keep them in step if those are ever retuned. */
+const LANDING_DARK_CARD = {
+  surface: "#201E17",  // = [data-theme="dark"] --paper
+  ink: "#F2EFE6",      // = [data-theme="dark"] --ink
+  hairline: "#38352B", // = [data-theme="dark"] --hairline
+  muted: "#C9C5B8",    // body copy on the ink card
+  onLemon: "#111111",  // = light --ink; text on the lemon button
+};
+
+/* Email capture. The only write in the app that runs without a session — it
+   posts to `waitlist_signups`, which grants anon INSERT and nothing else. */
+function WaitlistForm({ dark, stack }) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!email || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await submitWaitlistEmail(email);
+      setDone(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div style={{ fontSize: 15, fontWeight: 700, color: dark ? COLORS.lemon : COLORS.royalBlue }}>
+        You’re on the list — we’ll be in touch.
+      </div>
+    );
+  }
+
   return (
-    <AuthShell maxWidth={560}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-        <div style={{ width: 30, height: 30, background: COLORS.ink, borderRadius: RADIUS, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <ProjectIcon icon="urn" color={COLORS.lemon} size={17} />
+    <form onSubmit={submit} style={{ display: "flex", gap: 10, flexWrap: "wrap", maxWidth: stack ? "none" : 470 }}>
+      <input
+        type="email" required value={email} aria-label="Email address"
+        onChange={(e) => setEmail(e.target.value)} placeholder="you@studio.com"
+        style={{
+          flex: 1, minWidth: 190, padding: "12px 14px", fontSize: 14, fontFamily: "inherit",
+          borderRadius: RADIUS,
+          background: dark ? LANDING_DARK_CARD.surface : COLORS.paper,
+          color: dark ? LANDING_DARK_CARD.ink : COLORS.ink,
+          border: "1px solid " + (dark ? LANDING_DARK_CARD.hairline : COLORS.hairline),
+        }}
+      />
+      <button type="submit" disabled={busy}
+        style={{
+          padding: "12px 22px", fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+          borderRadius: RADIUS, border: "none", whiteSpace: "nowrap",
+          cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+          background: dark ? COLORS.lemon : COLORS.ink,
+          color: dark ? LANDING_DARK_CARD.onLemon : COLORS.cream,
+        }}>
+        {busy ? "Joining…" : "Join the waitlist"}
+      </button>
+      {error && <div style={{ flexBasis: "100%", fontSize: 13, color: COLORS.tomato }}>{error}</div>}
+    </form>
+  );
+}
+
+function LandingWordmark({ size }) {
+  const box = size || 26;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: box, height: box, background: COLORS.ink, borderRadius: RADIUS, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <ProjectIcon icon="urn" color={COLORS.lemon} size={Math.round(box * 0.56)} />
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>MOA Studio</span>
+    </div>
+  );
+}
+
+/* Section eyebrow. Deliberately muted rather than accent-colored — the five
+   hues are reserved for project identity, and on a page with this many
+   sections an accent on every label was just noise. */
+const LANDING_EYEBROW = {
+  fontSize: 10.5, fontWeight: 600, letterSpacing: "0.16em",
+  textTransform: "uppercase", color: COLORS.muted,
+};
+
+/* Page width and the hero's column gutter. These three are read together by
+   LANDING_HERO_PHOTO_LEFT below, so change them here rather than inline. */
+const LANDING_MAX_W = 1400;   // shell max-width
+const LANDING_PAD = 40;       // shell side padding above phone
+const LANDING_HERO_GAP = 96;  // hero grid gutter — the "daylight" either side
+
+/* Left edge of the hero photograph, expressed against the full-width wrapper.
+   Mirrors the hero grid so the photo starts in the middle of that gutter at
+   every viewport width:
+
+     shell is max-width LANDING_MAX_W, centred, LANDING_PAD side padding
+     grid is 0.85fr / 1.15fr, so the copy column is 0.85 / 2.0 = 0.425 of
+     whatever is left after the gap
+
+   Only used above 1024px, where the hero is two columns. */
+const LANDING_HERO_PHOTO_LEFT =
+  "calc(max(0px, (100% - " + LANDING_MAX_W + "px) / 2) + " + LANDING_PAD + "px" +
+  " + 0.425 * (min(100% - " + LANDING_PAD * 2 + "px, " + (LANDING_MAX_W - LANDING_PAD * 2) + "px)" +
+  " - " + LANDING_HERO_GAP + "px) + " + LANDING_HERO_GAP / 2 + "px)";
+
+/* Headlines only. Cormorant is a high-contrast face — it needs size and tight
+   leading to read as intended, so every use here is >= 26px. */
+const LANDING_DISPLAY = {
+  fontFamily: SERIF, fontWeight: 500, letterSpacing: "-0.005em", lineHeight: 1.08,
+};
+
+/* A short rule under a section headline, straight from Jenny's reference. */
+function LandingRule() {
+  return <div style={{ width: 34, height: 2, background: COLORS.ink, margin: "18px 0 0" }} />;
+}
+
+/* Small, flat recreations of real screens. Deliberately not screenshots —
+   they stay legible at any width and never go stale against the live app,
+   and they don't need photography the project doesn't have. */
+function LandingHomeMock({ compact }) {
+  const label = { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 };
+  return (
+    <div style={{ background: COLORS.paper, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden", boxShadow: "0 18px 48px rgba(17,17,17,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid " + COLORS.hairline }}>
+        <LandingWordmark size={18} />
+        <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>Home</span>
+      </div>
+      <div style={{ padding: compact ? "18px 16px" : "22px 20px" }}>
+        <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 4 }}>Wednesday, August 5</div>
+        <div style={{ ...LANDING_DISPLAY, fontSize: 26, margin: "0 0 18px" }}>Good morning, Jenny.</div>
+
+        <div style={{ ...label }}>My projects</div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr 1fr" : "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
+          {[
+            { name: "Moon jars", img: "assets/proj-moonjar.jpg", accent: "var(--accent-navy)", pct: 40 },
+            { name: "Lamp", img: "assets/proj-lamp.jpg", accent: "var(--accent-tomato)", pct: 65 },
+            { name: "Mugs", img: "assets/proj-mugs.jpg", accent: "var(--accent-lemon)", pct: 80 },
+          ].map((p) => (
+            <div key={p.name} style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
+              <div style={{ background: COLORS.cream, height: 78 }}>
+                <img src={p.img} alt="" style={galleryImg} />
+              </div>
+              <div style={{ padding: "7px 8px", borderTop: "1px solid " + COLORS.hairline }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                <div style={{ height: 3, background: COLORS.hairline, borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: p.pct + "%", background: p.accent }} />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>StudioCo</span>
-      </div>
 
-      <h1 style={{ fontSize: 40, lineHeight: 1.1, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
-        The quiet half of a<br />making practice.
-      </h1>
-      <p style={{ fontSize: 16, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 32px", maxWidth: 460 }}>
-        A private studio workspace for people who make things by hand. Track a piece
-        from first sketch through glaze, filming, listing and sale — eight stages,
-        one place, no spreadsheets.
-      </p>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button onClick={onLogIn} style={{ padding: "11px 22px", fontSize: 14, fontWeight: 600, fontFamily: "inherit", background: COLORS.ink, color: COLORS.cream, border: "none", borderRadius: RADIUS, cursor: "pointer" }}>
-          Log in
-        </button>
-        <button onClick={onSignUp} style={{ padding: "11px 22px", fontSize: 14, fontWeight: 600, fontFamily: "inherit", background: "transparent", color: COLORS.ink, border: "1px solid " + COLORS.ink, borderRadius: RADIUS, cursor: "pointer" }}>
-          Create an account
-        </button>
-      </div>
-
-      <div style={{ marginTop: 44, paddingTop: 24, borderTop: "1px solid " + COLORS.hairline, display: "flex", gap: 28, flexWrap: "wrap" }}>
-        {[
-          ["Eight stages", "Inspiration to learnings"],
-          ["Every device", "Your studio syncs everywhere"],
-          ["Private by default", "Only you can see your work"],
-        ].map(([title, sub]) => (
-          <div key={title} style={{ minWidth: 130 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 5 }}>{title}</div>
-            <div style={{ fontSize: 13, color: COLORS.muted, lineHeight: 1.45 }}>{sub}</div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "1fr 1fr", gap: 18 }}>
+          <div>
+            <div style={label}>Tasks</div>
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
+              {[
+                ["Trim foot", "Moon jars", "Today"],
+                ["Glaze test #2", "Moon jars", "May 2"],
+                ["Photo shoot", "Mugs", "May 4"],
+              ].map(([t, proj, when]) => (
+                <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
+                  <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t}</span>
+                  <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{when}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+          {/* A deliberately plain week: day headers, a two-hourly gutter from
+              9 to 5, and one booking. Enough to read as a calendar without
+              pretending to be the real scheduler. */}
+          <div style={{ minWidth: 0 }}>
+            <div style={label}>This week</div>
+            {/* Padding on the box so the rules stop short of its border rather
+                than running into it. */}
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, padding: "8px 10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "26px repeat(5, minmax(0, 1fr))", borderBottom: "1px solid " + COLORS.hairline }}>
+                <div />
+                {[["M", 3], ["T", 4], ["W", 5], ["T", 6], ["F", 7]].map(([d, n], i) => (
+                  <div key={i} style={{ textAlign: "center", padding: "5px 0", borderLeft: "1px solid " + COLORS.hairline }}>
+                    <div style={{ fontSize: 8.5, color: COLORS.muted, letterSpacing: "0.06em" }}>{d}</div>
+                    <div style={{ fontSize: 10, fontWeight: n === 5 ? 700 : 400 }}>{n}</div>
+                  </div>
+                ))}
+              </div>
+              {["9a", "11a", "1p", "3p", "5p"].map((hour, r) => (
+                <div key={hour} style={{ display: "grid", gridTemplateColumns: "26px repeat(5, minmax(0, 1fr))", borderBottom: r === 4 ? "none" : "1px solid " + COLORS.hairline, minHeight: 26 }}>
+                  <div style={{ fontSize: 8, color: COLORS.muted, textAlign: "right", paddingRight: 4, paddingTop: 3 }}>{hour}</div>
+                  {[0, 1, 2, 3, 4].map((c) => (
+                    <div key={c} style={{ borderLeft: "1px solid " + COLORS.hairline, padding: 2 }}>
+                      {/* Wraps rather than truncating — a day column is only
+                          ~44px, and "Photo …" reads worse than two short lines. */}
+                      {hour === "3p" && c === 2 && (
+                        <div style={{ background: COLORS.cream, borderLeft: "2px solid var(--accent-tomato)", borderRadius: 2, padding: "1px 3px", fontSize: 7.5, fontWeight: 600, lineHeight: 1.25 }}>
+                          Photo shoot
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-    </AuthShell>
+    </div>
+  );
+}
+
+function LandingProjectMock({ compact }) {
+  const label = { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 };
+  return (
+    <div style={{ background: COLORS.paper, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden", boxShadow: "0 18px 48px rgba(17,17,17,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 16px", borderBottom: "1px solid " + COLORS.hairline }}>
+        <span style={{ fontSize: 10.5, color: COLORS.muted }}>Projects</span>
+        <span style={{ fontSize: 10.5, color: COLORS.muted }}>›</span>
+        <span style={{ fontSize: 10.5, fontWeight: 600 }}>Moon jars</span>
+      </div>
+      <div style={{ padding: compact ? "18px 16px" : "22px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <span style={{ ...LANDING_DISPLAY, fontSize: 28, borderLeft: "3px solid var(--accent-navy)", paddingLeft: 12 }}>Moon jars</span>
+          <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted, marginLeft: "auto" }}>In progress</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "180px 1fr", gap: 20 }}>
+          <div>
+            <div style={label}>Project details</div>
+            {[["Start date", "Apr 12"], ["Due date", "May 20"], ["Category", "Ceramics"], ["Pieces", "9"]].map(([k, v]) => (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: "1px solid " + COLORS.hairline }}>
+                <span style={{ fontSize: 10.5, color: COLORS.muted }}>{k}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600 }}>{v}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                <span style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted }}>Progress</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600 }}>40%</span>
+              </div>
+              <div style={{ height: 4, background: COLORS.hairline, borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: "40%", background: "var(--accent-navy)" }} />
+              </div>
+            </div>
+          </div>
+          {/* Gallery beside a task list, as in Jenny's reference: the vessel
+              shot spans both rows, the other two stack in the second column,
+              and the last third carries the same task rows as the Home mock. */}
+          <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "minmax(0, 1.55fr) minmax(0, 1fr)", gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={label}>Gallery</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gridTemplateRows: "repeat(2, 92px)", gap: 6 }}>
+                <div style={{ ...galleryTile, gridColumn: "1", gridRow: "1 / 3" }}>
+                  <img src="assets/gallery-hero.jpg" alt="" style={galleryImg} />
+                </div>
+                <div style={galleryTile}>
+                  <img src="assets/gallery-plant.jpg" alt="" style={galleryImg} />
+                </div>
+                <div style={galleryTile}>
+                  <img src="assets/gallery-pots.jpg" alt="" style={galleryImg} />
+                </div>
+              </div>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={label}>Next tasks</div>
+              <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
+                {[["Trim foot", "Today"], ["Glaze test #2", "May 2"], ["Photo shoot", "May 4"]].map(([t, when]) => (
+                  <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
+                    <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t}</span>
+                    <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{when}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LandingScreen({ onLogIn }) {
+  const viewport = useViewport();
+  const isPhone = viewport.isPhone;
+  const isCompact = viewport.isCompact;
+  const pad = isPhone ? 20 : LANDING_PAD;
+  const shell = { maxWidth: LANDING_MAX_W, margin: "0 auto", padding: "0 " + pad + "px" };
+
+  const jump = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const navLink = { fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.ink, background: "none", border: "none", padding: 0, fontFamily: "inherit", cursor: "pointer" };
+  const landingCols = isPhone ? 2 : isCompact ? 3 : 5;
+
+  return (
+    <div style={{ fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, Arial, sans-serif', background: COLORS.cream, color: COLORS.ink, minHeight: "100vh", position: "relative", zIndex: 0 }}>
+
+      {/* Nav */}
+      <div style={{ ...shell, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: (isPhone ? "18px " : "26px ") + pad + "px" }}>
+        <LandingWordmark />
+        <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 18 : 30 }}>
+          <button onClick={onLogIn} style={navLink}>Log in</button>
+          {!isPhone && (
+            <button onClick={() => jump("waitlist")} style={{ background: COLORS.ink, color: COLORS.cream, border: "none", borderRadius: RADIUS, padding: "13px 22px", fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
+              Join the waitlist
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Hero — headline left; on the right the Home recreation sits on top of
+          a photograph that bleeds off the right edge of the viewport, per
+          Jenny's mockup. The photo is positioned against the full-width
+          wrapper rather than the centred shell, which is what lets it run to
+          the edge while the content stays within the page margins. */}
+      <div style={{ position: "relative" }}>
+        {!isCompact && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute", top: 0, right: 0, bottom: 0,
+              // Left edge is pinned to the layout, not a percentage of the
+              // viewport. A flat percentage drifts left of the copy once the
+              // shell hits its 1240px cap and starts centring — past ~2000px
+              // the text column outruns it and the photo runs under the words.
+              // This resolves to the middle of the grid gutter at every width,
+              // so the photo only ever grows rightward. Percentages are of the
+              // full-width wrapper (not 100vw), so a scrollbar can't push it
+              // out and cause horizontal overflow.
+              left: LANDING_HERO_PHOTO_LEFT,
+              backgroundImage: "url('assets/hero-vessel.jpg')",
+              backgroundSize: "cover",
+              // Anchored low so the vessel's foot stays put as the panel grows
+              // and the pot expands upward, rather than the crop breathing
+              // around the middle of the image.
+              backgroundPosition: "center 82%",
+            }}
+          />
+        )}
+        <div style={{ ...shell, position: "relative", zIndex: 1, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : LANDING_HERO_GAP, alignItems: "center" }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 46 : 68, margin: "0 0 24px" }}>
+              The creative workspace you’ve been waiting for.
+            </h1>
+            <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 28px", maxWidth: 440 }}>
+              Plan your projects. Track every detail. Create content that connects.
+              All in one beautiful, intuitive space.
+            </p>
+            <WaitlistForm />
+          </div>
+          <div id="preview" style={{ minWidth: 0, scrollMarginTop: 20 }}>
+            <LandingHomeMock compact={isCompact} />
+          </div>
+        </div>
+      </div>
+
+      {/* Built for artists — left-aligned to the same margin as the hero */}
+      <div id="features" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16 }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 48 : 76, paddingBottom: isPhone ? 40 : 64 }}>
+          <div style={LANDING_EYEBROW}>Built for artists</div>
+          <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 44, margin: "14px 0 0" }}>
+            One studio, one place.
+          </h2>
+          <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "12px 0 0" }}>
+            A private, organized workspace.
+          </p>
+          <LandingRule />
+
+          {/* Five across only on real desktop. At tablet widths five columns
+              leave ~165px each and the titles start wrapping mid-phrase, so the
+              strip steps down to 3, then 2 on phone. No dividers, per Jenny —
+              a real column gap carries the separation instead. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(" + landingCols + ", minmax(0, 1fr))", columnGap: isPhone ? 22 : 40, rowGap: isPhone ? 30 : 40, marginTop: isPhone ? 34 : 52 }}>
+            {LANDING_SECTION_MARKS.map((f) => (
+              <div key={f.key} style={{ minWidth: 0 }}>
+                <i className={"ti " + f.icon} style={{ fontSize: 26, display: "block", marginBottom: 16 }} aria-hidden="true" />
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.55, color: COLORS.muted }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* The product section — Jenny's second block, demoted from a competing
+          hero to a section so the page has one clear entry headline. */}
+      <div style={{ borderTop: "1px solid " + COLORS.hairline, background: COLORS.paper }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 48 : 80, paddingBottom: isPhone ? 48 : 80, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.8fr) minmax(0, 1.2fr)", gap: isCompact ? 40 : 56, alignItems: "center" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={LANDING_EYEBROW}>Designed to disappear</div>
+            <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 46, margin: "14px 0 20px" }}>
+              More time creating,<br />less time managing.
+            </h2>
+            <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: 0, maxWidth: 440 }}>
+              Seamlessly track every project from inspiration to sale. An intuitive,
+              end-to-end record system built for makers of every kind, so you can
+              focus on your craft, not your tools.
+            </p>
+            <button onClick={() => jump("waitlist")} style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 10, background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}>
+              Join the waitlist
+              <i className="ti ti-arrow-right" style={{ fontSize: 15 }} aria-hidden="true" />
+            </button>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <LandingProjectMock compact={isCompact} />
+          </div>
+        </div>
+      </div>
+
+      {/* Waitlist — layout follows Jenny's reference: the vessel sits at the
+          far left and bleeds off the bottom edge of the band, headline and
+          copy stack beside it, and the form sits on the right. */}
+      <div id="waitlist" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16, background: COLORS.ink, color: COLORS.cream, overflow: "hidden" }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 40 : LANDING_BAND_PAD_Y, paddingBottom: isPhone ? 40 : LANDING_BAND_PAD_Y, display: "grid", gridTemplateColumns: isCompact ? "1fr" : LANDING_VASE_COL + "px minmax(0, 1.05fr) minmax(0, 0.95fr)", gap: isCompact ? 32 : 48, alignItems: "center" }}>
+          {/* The photograph, top-aligned with the "Early access" eyebrow and cut
+              off at exactly half by the band's bottom edge.
+
+              The cell stretches to the row height, so 200% + twice the band's
+              vertical padding is exactly twice the distance from the row's top
+              to the band's outer edge — meaning the half below that edge is
+              the half that gets clipped, at any row height. Absolute, so a
+              photo this tall can't stretch the band it's measuring itself
+              against. */}
+          {!isCompact && (
+            <div style={{ position: "relative", alignSelf: "stretch" }}>
+              <img
+                src="assets/vase-cutout.jpg"
+                alt=""
+                aria-hidden="true"
+                style={{
+                  position: "absolute", top: 0, left: 0, display: "block",
+                  height: "calc(200% + " + LANDING_BAND_PAD_Y * 2 + "px)",
+                  width: "auto",
+                }}
+              />
+            </div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...LANDING_EYEBROW, color: COLORS.lemon }}>Early access</div>
+            <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 32 : 40, margin: "14px 0 16px" }}>
+              Be the first to build with us.
+            </h2>
+            <p style={{ fontSize: 14.5, lineHeight: 1.6, color: LANDING_DARK_CARD.muted, margin: 0, maxWidth: 400 }}>
+              MOA Studio is opening up slowly — we’re onboarding artists in small
+              batches while we build out the rest. Leave your email and we’ll
+              reach out.
+            </p>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <WaitlistForm dark stack />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ ...shell, padding: "28px " + pad + "px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <LandingWordmark size={20} />
+        <div style={{ display: "flex", gap: 26, flexWrap: "wrap" }}>
+          <a href="https://instagram.com/offline_jenny" target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none", color: COLORS.muted }}>Instagram</a>
+          <button onClick={onLogIn} style={{ ...navLink, color: COLORS.muted }}>Log in</button>
+        </div>
+        <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 MOA Studio</div>
+      </div>
+
+    </div>
   );
 }
 
@@ -7587,8 +8170,11 @@ function App() {
 
   if (session) return <StudioApp onSignOut={() => { Auth.signOut(); }} email={session.email} />;
 
+  // Sign-up is deliberately unlinked while MOA Studio is waitlist-only — the
+  // landing page offers "Join the waitlist" instead. AuthScreen still supports
+  // mode="signup" untouched, so restoring it is a one-line change.
   if (view === "landing") {
-    return <LandingScreen onLogIn={() => setView("login")} onSignUp={() => setView("signup")} />;
+    return <LandingScreen onLogIn={() => setView("login")} />;
   }
   return (
     <AuthScreen
