@@ -7658,16 +7658,15 @@ function LandingHomeMock({ compact }) {
         <div style={{ ...LANDING_DISPLAY, fontSize: 26, margin: "0 0 18px" }}>Good morning, Jenny.</div>
 
         <div style={{ ...label }}>My projects</div>
-        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr 1fr" : "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
           {[
-            { name: "Moon jars", icon: "hourglass", accent: "var(--accent-navy)", pct: 40 },
-            { name: "Mushroom lamp", icon: "squiggly", accent: "var(--accent-tomato)", pct: 65 },
-            { name: "Oil dispenser", icon: "angular", accent: "var(--accent-cobalt)", pct: 20 },
-            { name: "Canyon mugs", icon: "trumpet", accent: "var(--accent-lemon)", pct: 80 },
+            { name: "Moon jars", img: "assets/proj-moonjar.jpg", accent: "var(--accent-navy)", pct: 40 },
+            { name: "Lamp", img: "assets/proj-lamp.jpg", accent: "var(--accent-tomato)", pct: 65 },
+            { name: "Mugs", img: "assets/proj-mugs.jpg", accent: "var(--accent-lemon)", pct: 80 },
           ].map((p) => (
             <div key={p.name} style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
-              <div style={{ background: COLORS.cream, height: 54, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <ProjectIcon icon={p.icon} color={p.accent} size={26} />
+              <div style={{ background: COLORS.cream, height: 78 }}>
+                <img src={p.img} alt="" style={galleryImg} />
               </div>
               <div style={{ padding: "7px 8px", borderTop: "1px solid " + COLORS.hairline }}>
                 <div style={{ fontSize: 10.5, fontWeight: 600, marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
@@ -7686,7 +7685,7 @@ function LandingHomeMock({ compact }) {
               {[
                 ["Trim foot", "Moon jars", "Today"],
                 ["Glaze test #2", "Moon jars", "May 2"],
-                ["Photo shoot", "Canyon mugs", "May 4"],
+                ["Photo shoot", "Mugs", "May 4"],
               ].map(([t, proj, when]) => (
                 <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
                   <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
@@ -7696,14 +7695,35 @@ function LandingHomeMock({ compact }) {
               ))}
             </div>
           </div>
-          <div>
-            <div style={label}>Supplies needed</div>
-            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
-              {[["Porcelain, 25kg", "3 left"], ["Matte white glaze", "2"], ["Wire & ribs", "1"]].map(([n, q]) => (
-                <div key={n} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
-                  <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</span>
-                  <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{q}</span>
+          {/* A deliberately plain week: day headers, a two-hourly gutter from
+              9 to 5, and one booking. Enough to read as a calendar without
+              pretending to be the real scheduler. */}
+          <div style={{ minWidth: 0 }}>
+            <div style={label}>This week</div>
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "26px repeat(5, minmax(0, 1fr))", borderBottom: "1px solid " + COLORS.hairline }}>
+                <div />
+                {[["M", 3], ["T", 4], ["W", 5], ["T", 6], ["F", 7]].map(([d, n], i) => (
+                  <div key={i} style={{ textAlign: "center", padding: "5px 0", borderLeft: "1px solid " + COLORS.hairline }}>
+                    <div style={{ fontSize: 8.5, color: COLORS.muted, letterSpacing: "0.06em" }}>{d}</div>
+                    <div style={{ fontSize: 10, fontWeight: n === 5 ? 700 : 400 }}>{n}</div>
+                  </div>
+                ))}
+              </div>
+              {["9a", "11a", "1p", "3p", "5p"].map((hour, r) => (
+                <div key={hour} style={{ display: "grid", gridTemplateColumns: "26px repeat(5, minmax(0, 1fr))", borderBottom: r === 4 ? "none" : "1px solid " + COLORS.hairline, minHeight: 26 }}>
+                  <div style={{ fontSize: 8, color: COLORS.muted, textAlign: "right", paddingRight: 4, paddingTop: 3 }}>{hour}</div>
+                  {[0, 1, 2, 3, 4].map((c) => (
+                    <div key={c} style={{ borderLeft: "1px solid " + COLORS.hairline, padding: 2 }}>
+                      {/* Wraps rather than truncating — a day column is only
+                          ~44px, and "Photo …" reads worse than two short lines. */}
+                      {hour === "3p" && c === 2 && (
+                        <div style={{ background: COLORS.cream, borderLeft: "2px solid var(--accent-tomato)", borderRadius: 2, padding: "1px 3px", fontSize: 7.5, fontWeight: 600, lineHeight: 1.25 }}>
+                          Photo shoot
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
