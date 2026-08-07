@@ -5,7 +5,7 @@
 <title>StudioCo — Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -96,6 +96,13 @@ const COLORS = {
 };
 
 const RADIUS = 3; // sharp, editorial — not 0, not soft
+
+/* Display face, for headlines only — Inter still carries every piece of UI,
+   body copy, label and control in the app. Jenny's call: the sans headlines
+   read flat on the public page, and a high-contrast garamond gives it the
+   editorial weight the rest of the system is aiming at. Used at large sizes
+   with tight leading; never below ~20px, where its thin strokes fall apart. */
+const SERIF = '"Cormorant Garamond", "Iowan Old Style", Georgia, serif';
 
 // Project accent = one hue each, used only as: left stripe, small dot, tag text.
 // Each resolves through a CSS variable so the hue stays recognisable in both
@@ -455,6 +462,22 @@ const Auth = {
     window.location.reload();
   },
 };
+
+/* Public waitlist capture — no session required. Backed by a dedicated
+   waitlist_signups table with an anon insert-only RLS policy (no read),
+   separate from the authenticated app_state data store. */
+async function submitWaitlistEmail(email) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/waitlist_signups", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Couldn’t join the waitlist — try again.");
+}
 
 /* One fetch wrapper for every data call: attaches the token, and on a 401
    refreshes once and retries. Anything still failing throws to the caller. */
@@ -7550,47 +7573,516 @@ function AuthShell({ children, maxWidth }) {
   );
 }
 
-function LandingScreen({ onLogIn, onSignUp }) {
+/* ---------- Landing page ----------
+   Public face of StudioCo, and the only screen a signed-out visitor sees.
+   Built in the app's own language — Inter, 3px radius, cream paper, the five
+   accent hues, vessel silhouettes for every icon — rather than a separate
+   marketing style, so signing in doesn't feel like a different product.
+
+   Always renders light: `data-theme` is only set inside StudioApp, so nothing
+   here is reached with the dark palette applied.
+
+   Two stacked halves, per Jenny's call: the original short landing copy at the
+   top spread across the full width, then the fuller marketing page underneath.
+
+   Section identity is carried exactly the way project identity is everywhere
+   else — an accent-colored label plus a vessel silhouette — never a tinted
+   fill. The bands alternate between the two existing surface tokens only, so
+   this page introduces no color the palette doesn't already have. */
+const LANDING_SECTION_MARKS = [
+  { key: "hub", icon: "ti-stack-2", title: "Project Hub",
+    desc: "Organize all of your projects from idea to finished piece." },
+  { key: "schedule", icon: "ti-calendar-month", title: "Studio Schedule",
+    desc: "See today’s tasks and plan ahead without leaving the bench." },
+  { key: "marketing", icon: "ti-photo", title: "Content & Marketing",
+    desc: "Plan, schedule, and track content that showcases your work and grows your audience." },
+  { key: "inventory", icon: "ti-box", title: "Inventory & Sales",
+    desc: "Know what’s finished, what’s in progress, and what’s ready to sell." },
+  { key: "analytics", icon: "ti-chart-bar", title: "Analytics",
+    desc: "Understand what’s working and make smarter creative decisions." },
+];
+
+/* Gallery tiles in the project mock. */
+const galleryTile = { background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" };
+const galleryImg = { width: "100%", height: "100%", objectFit: "cover", display: "block" };
+
+/* Waitlist band geometry. The photograph is sized off the band rather than
+   given a fixed height — see the note where it's rendered. */
+const LANDING_BAND_PAD_Y = 44;
+const LANDING_VASE_COL = 380; // column reserved for the photograph
+
+/* The waitlist CTA is deliberately a dark card sitting on a light page, so it
+   can't read COLORS.* — those resolve to light values on this always-light
+   screen. These mirror the [data-theme="dark"] tokens in <style> by value;
+   keep them in step if those are ever retuned. */
+const LANDING_DARK_CARD = {
+  surface: "#201E17",  // = [data-theme="dark"] --paper
+  ink: "#F2EFE6",      // = [data-theme="dark"] --ink
+  hairline: "#38352B", // = [data-theme="dark"] --hairline
+  muted: "#C9C5B8",    // body copy on the ink card
+  onLemon: "#111111",  // = light --ink; text on the lemon button
+};
+
+/* Email capture. The only write in the app that runs without a session — it
+   posts to `waitlist_signups`, which grants anon INSERT and nothing else. */
+function WaitlistForm({ dark, stack }) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!email || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await submitWaitlistEmail(email);
+      setDone(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div style={{ fontSize: 15, fontWeight: 700, color: dark ? COLORS.lemon : COLORS.royalBlue }}>
+        You’re on the list — we’ll be in touch.
+      </div>
+    );
+  }
+
   return (
-    <AuthShell maxWidth={560}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-        <div style={{ width: 30, height: 30, background: COLORS.ink, borderRadius: RADIUS, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <ProjectIcon icon="urn" color={COLORS.lemon} size={17} />
+    <form onSubmit={submit} style={{ display: "flex", gap: 10, flexWrap: "wrap", maxWidth: stack ? "none" : 470 }}>
+      <input
+        type="email" required value={email} aria-label="Email address"
+        onChange={(e) => setEmail(e.target.value)} placeholder="you@studio.com"
+        style={{
+          flex: 1, minWidth: 190, padding: "12px 14px", fontSize: 14, fontFamily: "inherit",
+          borderRadius: RADIUS,
+          background: dark ? LANDING_DARK_CARD.surface : COLORS.paper,
+          color: dark ? LANDING_DARK_CARD.ink : COLORS.ink,
+          border: "1px solid " + (dark ? LANDING_DARK_CARD.hairline : COLORS.hairline),
+        }}
+      />
+      <button type="submit" disabled={busy}
+        style={{
+          padding: "12px 22px", fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+          borderRadius: RADIUS, border: "none", whiteSpace: "nowrap",
+          cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+          background: dark ? COLORS.lemon : COLORS.ink,
+          color: dark ? LANDING_DARK_CARD.onLemon : COLORS.cream,
+        }}>
+        {busy ? "Joining…" : "Join the waitlist"}
+      </button>
+      {error && <div style={{ flexBasis: "100%", fontSize: 13, color: COLORS.tomato }}>{error}</div>}
+    </form>
+  );
+}
+
+function LandingWordmark({ size }) {
+  const box = size || 26;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: box, height: box, background: COLORS.ink, borderRadius: RADIUS, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <ProjectIcon icon="urn" color={COLORS.lemon} size={Math.round(box * 0.56)} />
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>StudioCo</span>
+    </div>
+  );
+}
+
+/* Section eyebrow. Deliberately muted rather than accent-colored — the five
+   hues are reserved for project identity, and on a page with this many
+   sections an accent on every label was just noise. */
+const LANDING_EYEBROW = {
+  fontSize: 10.5, fontWeight: 600, letterSpacing: "0.16em",
+  textTransform: "uppercase", color: COLORS.muted,
+};
+
+/* Page width and the hero's column gutter. These three are read together by
+   LANDING_HERO_PHOTO_LEFT below, so change them here rather than inline. */
+const LANDING_MAX_W = 1400;   // shell max-width
+const LANDING_PAD = 40;       // shell side padding above phone
+const LANDING_HERO_GAP = 96;  // hero grid gutter — the "daylight" either side
+
+/* Left edge of the hero photograph, expressed against the full-width wrapper.
+   Mirrors the hero grid so the photo starts in the middle of that gutter at
+   every viewport width:
+
+     shell is max-width LANDING_MAX_W, centred, LANDING_PAD side padding
+     grid is 0.85fr / 1.15fr, so the copy column is 0.85 / 2.0 = 0.425 of
+     whatever is left after the gap
+
+   Only used above 1024px, where the hero is two columns. */
+const LANDING_HERO_PHOTO_LEFT =
+  "calc(max(0px, (100% - " + LANDING_MAX_W + "px) / 2) + " + LANDING_PAD + "px" +
+  " + 0.425 * (min(100% - " + LANDING_PAD * 2 + "px, " + (LANDING_MAX_W - LANDING_PAD * 2) + "px)" +
+  " - " + LANDING_HERO_GAP + "px) + " + LANDING_HERO_GAP / 2 + "px)";
+
+/* Headlines only. Cormorant is a high-contrast face — it needs size and tight
+   leading to read as intended, so every use here is >= 26px. */
+const LANDING_DISPLAY = {
+  fontFamily: SERIF, fontWeight: 500, letterSpacing: "-0.005em", lineHeight: 1.08,
+};
+
+/* A short rule under a section headline, straight from Jenny's reference. */
+function LandingRule() {
+  return <div style={{ width: 34, height: 2, background: COLORS.ink, margin: "18px 0 0" }} />;
+}
+
+/* Small, flat recreations of real screens. Deliberately not screenshots —
+   they stay legible at any width and never go stale against the live app,
+   and they don't need photography the project doesn't have. */
+function LandingHomeMock({ compact }) {
+  const label = { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 };
+  return (
+    <div style={{ background: COLORS.paper, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden", boxShadow: "0 18px 48px rgba(17,17,17,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid " + COLORS.hairline }}>
+        <LandingWordmark size={18} />
+        <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>Home</span>
+      </div>
+      <div style={{ padding: compact ? "18px 16px" : "22px 20px" }}>
+        <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 4 }}>Wednesday, August 5</div>
+        <div style={{ ...LANDING_DISPLAY, fontSize: 26, margin: "0 0 18px" }}>Good morning, Jenny.</div>
+
+        <div style={{ ...label }}>My projects</div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr 1fr" : "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
+          {[
+            { name: "Moon jars", img: "assets/proj-moonjar.jpg", accent: "var(--accent-navy)", pct: 40 },
+            { name: "Lamp", img: "assets/proj-lamp.jpg", accent: "var(--accent-tomato)", pct: 65 },
+            { name: "Mugs", img: "assets/proj-mugs.jpg", accent: "var(--accent-lemon)", pct: 80 },
+          ].map((p) => (
+            <div key={p.name} style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
+              <div style={{ background: COLORS.cream, height: 78 }}>
+                <img src={p.img} alt="" style={galleryImg} />
+              </div>
+              <div style={{ padding: "7px 8px", borderTop: "1px solid " + COLORS.hairline }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                <div style={{ height: 3, background: COLORS.hairline, borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: p.pct + "%", background: p.accent }} />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>StudioCo</span>
-      </div>
 
-      <h1 style={{ fontSize: 40, lineHeight: 1.1, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
-        The quiet half of a<br />making practice.
-      </h1>
-      <p style={{ fontSize: 16, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 32px", maxWidth: 460 }}>
-        A private studio workspace for people who make things by hand. Track a piece
-        from first sketch through glaze, filming, listing and sale — eight stages,
-        one place, no spreadsheets.
-      </p>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button onClick={onLogIn} style={{ padding: "11px 22px", fontSize: 14, fontWeight: 600, fontFamily: "inherit", background: COLORS.ink, color: COLORS.cream, border: "none", borderRadius: RADIUS, cursor: "pointer" }}>
-          Log in
-        </button>
-        <button onClick={onSignUp} style={{ padding: "11px 22px", fontSize: 14, fontWeight: 600, fontFamily: "inherit", background: "transparent", color: COLORS.ink, border: "1px solid " + COLORS.ink, borderRadius: RADIUS, cursor: "pointer" }}>
-          Create an account
-        </button>
-      </div>
-
-      <div style={{ marginTop: 44, paddingTop: 24, borderTop: "1px solid " + COLORS.hairline, display: "flex", gap: 28, flexWrap: "wrap" }}>
-        {[
-          ["Eight stages", "Inspiration to learnings"],
-          ["Every device", "Your studio syncs everywhere"],
-          ["Private by default", "Only you can see your work"],
-        ].map(([title, sub]) => (
-          <div key={title} style={{ minWidth: 130 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 5 }}>{title}</div>
-            <div style={{ fontSize: 13, color: COLORS.muted, lineHeight: 1.45 }}>{sub}</div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "1fr 1fr", gap: 18 }}>
+          <div>
+            <div style={label}>Tasks</div>
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
+              {[
+                ["Trim foot", "Moon jars", "Today"],
+                ["Glaze test #2", "Moon jars", "May 2"],
+                ["Photo shoot", "Mugs", "May 4"],
+              ].map(([t, proj, when]) => (
+                <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
+                  <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t}</span>
+                  <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{when}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+          {/* A deliberately plain week: day headers, a two-hourly gutter from
+              9 to 5, and one booking. Enough to read as a calendar without
+              pretending to be the real scheduler. */}
+          <div style={{ minWidth: 0 }}>
+            <div style={label}>This week</div>
+            {/* Padding on the box so the rules stop short of its border rather
+                than running into it. */}
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, padding: "8px 10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "26px repeat(5, minmax(0, 1fr))", borderBottom: "1px solid " + COLORS.hairline }}>
+                <div />
+                {[["M", 3], ["T", 4], ["W", 5], ["T", 6], ["F", 7]].map(([d, n], i) => (
+                  <div key={i} style={{ textAlign: "center", padding: "5px 0", borderLeft: "1px solid " + COLORS.hairline }}>
+                    <div style={{ fontSize: 8.5, color: COLORS.muted, letterSpacing: "0.06em" }}>{d}</div>
+                    <div style={{ fontSize: 10, fontWeight: n === 5 ? 700 : 400 }}>{n}</div>
+                  </div>
+                ))}
+              </div>
+              {["9a", "11a", "1p", "3p", "5p"].map((hour, r) => (
+                <div key={hour} style={{ display: "grid", gridTemplateColumns: "26px repeat(5, minmax(0, 1fr))", borderBottom: r === 4 ? "none" : "1px solid " + COLORS.hairline, minHeight: 26 }}>
+                  <div style={{ fontSize: 8, color: COLORS.muted, textAlign: "right", paddingRight: 4, paddingTop: 3 }}>{hour}</div>
+                  {[0, 1, 2, 3, 4].map((c) => (
+                    <div key={c} style={{ borderLeft: "1px solid " + COLORS.hairline, padding: 2 }}>
+                      {/* Wraps rather than truncating — a day column is only
+                          ~44px, and "Photo …" reads worse than two short lines. */}
+                      {hour === "3p" && c === 2 && (
+                        <div style={{ background: COLORS.cream, borderLeft: "2px solid var(--accent-tomato)", borderRadius: 2, padding: "1px 3px", fontSize: 7.5, fontWeight: 600, lineHeight: 1.25 }}>
+                          Photo shoot
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-    </AuthShell>
+    </div>
+  );
+}
+
+function LandingProjectMock({ compact }) {
+  const label = { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 };
+  return (
+    <div style={{ background: COLORS.paper, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden", boxShadow: "0 18px 48px rgba(17,17,17,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 16px", borderBottom: "1px solid " + COLORS.hairline }}>
+        <span style={{ fontSize: 10.5, color: COLORS.muted }}>Projects</span>
+        <span style={{ fontSize: 10.5, color: COLORS.muted }}>›</span>
+        <span style={{ fontSize: 10.5, fontWeight: 600 }}>Moon jars</span>
+      </div>
+      <div style={{ padding: compact ? "18px 16px" : "22px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <span style={{ ...LANDING_DISPLAY, fontSize: 28, borderLeft: "3px solid var(--accent-navy)", paddingLeft: 12 }}>Moon jars</span>
+          <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted, marginLeft: "auto" }}>In progress</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "180px 1fr", gap: 20 }}>
+          <div>
+            <div style={label}>Project details</div>
+            {[["Start date", "Apr 12"], ["Due date", "May 20"], ["Category", "Ceramics"], ["Pieces", "9"]].map(([k, v]) => (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: "1px solid " + COLORS.hairline }}>
+                <span style={{ fontSize: 10.5, color: COLORS.muted }}>{k}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600 }}>{v}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                <span style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted }}>Progress</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600 }}>40%</span>
+              </div>
+              <div style={{ height: 4, background: COLORS.hairline, borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: "40%", background: "var(--accent-navy)" }} />
+              </div>
+            </div>
+          </div>
+          {/* Gallery beside a task list, as in Jenny's reference: the vessel
+              shot spans both rows, the other two stack in the second column,
+              and the last third carries the same task rows as the Home mock. */}
+          <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "minmax(0, 1.55fr) minmax(0, 1fr)", gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={label}>Gallery</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gridTemplateRows: "repeat(2, 92px)", gap: 6 }}>
+                <div style={{ ...galleryTile, gridColumn: "1", gridRow: "1 / 3" }}>
+                  <img src="assets/gallery-hero.jpg" alt="" style={galleryImg} />
+                </div>
+                <div style={galleryTile}>
+                  <img src="assets/gallery-plant.jpg" alt="" style={galleryImg} />
+                </div>
+                <div style={galleryTile}>
+                  <img src="assets/gallery-pots.jpg" alt="" style={galleryImg} />
+                </div>
+              </div>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={label}>Next tasks</div>
+              <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
+                {[["Trim foot", "Today"], ["Glaze test #2", "May 2"], ["Photo shoot", "May 4"]].map(([t, when]) => (
+                  <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
+                    <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t}</span>
+                    <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{when}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LandingScreen({ onLogIn }) {
+  const viewport = useViewport();
+  const isPhone = viewport.isPhone;
+  const isCompact = viewport.isCompact;
+  const pad = isPhone ? 20 : LANDING_PAD;
+  const shell = { maxWidth: LANDING_MAX_W, margin: "0 auto", padding: "0 " + pad + "px" };
+
+  const jump = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const navLink = { fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.ink, background: "none", border: "none", padding: 0, fontFamily: "inherit", cursor: "pointer" };
+  const landingCols = isPhone ? 2 : isCompact ? 3 : 5;
+
+  return (
+    <div style={{ fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, Arial, sans-serif', background: COLORS.cream, color: COLORS.ink, minHeight: "100vh", position: "relative", zIndex: 0 }}>
+
+      {/* Nav */}
+      <div style={{ ...shell, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: (isPhone ? "18px " : "26px ") + pad + "px" }}>
+        <LandingWordmark />
+        <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 18 : 30 }}>
+          <button onClick={onLogIn} style={navLink}>Log in</button>
+          {!isPhone && (
+            <button onClick={() => jump("waitlist")} style={{ background: COLORS.ink, color: COLORS.cream, border: "none", borderRadius: RADIUS, padding: "13px 22px", fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
+              Join the waitlist
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Hero — headline left; on the right the Home recreation sits on top of
+          a photograph that bleeds off the right edge of the viewport, per
+          Jenny's mockup. The photo is positioned against the full-width
+          wrapper rather than the centred shell, which is what lets it run to
+          the edge while the content stays within the page margins. */}
+      <div style={{ position: "relative" }}>
+        {!isCompact && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute", top: 0, right: 0, bottom: 0,
+              // Left edge is pinned to the layout, not a percentage of the
+              // viewport. A flat percentage drifts left of the copy once the
+              // shell hits its 1240px cap and starts centring — past ~2000px
+              // the text column outruns it and the photo runs under the words.
+              // This resolves to the middle of the grid gutter at every width,
+              // so the photo only ever grows rightward. Percentages are of the
+              // full-width wrapper (not 100vw), so a scrollbar can't push it
+              // out and cause horizontal overflow.
+              left: LANDING_HERO_PHOTO_LEFT,
+              backgroundImage: "url('assets/hero-vessel.jpg')",
+              backgroundSize: "cover",
+              // Anchored low so the vessel's foot stays put as the panel grows
+              // and the pot expands upward, rather than the crop breathing
+              // around the middle of the image.
+              backgroundPosition: "center 82%",
+            }}
+          />
+        )}
+        <div style={{ ...shell, position: "relative", zIndex: 1, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : LANDING_HERO_GAP, alignItems: "center" }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 46 : 68, margin: "0 0 24px" }}>
+              The creative workspace you’ve been waiting for.
+            </h1>
+            <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 28px", maxWidth: 440 }}>
+              Plan your projects. Track every detail. Create content that connects.
+              All in one beautiful, intuitive space.
+            </p>
+            <WaitlistForm />
+          </div>
+          <div id="preview" style={{ minWidth: 0, scrollMarginTop: 20 }}>
+            <LandingHomeMock compact={isCompact} />
+          </div>
+        </div>
+      </div>
+
+      {/* Built for artists — left-aligned to the same margin as the hero */}
+      <div id="features" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16 }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 48 : 76, paddingBottom: isPhone ? 40 : 64 }}>
+          <div style={LANDING_EYEBROW}>Built for artists</div>
+          <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 44, margin: "14px 0 0" }}>
+            One studio, one place.
+          </h2>
+          <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "12px 0 0" }}>
+            A private, organized workspace.
+          </p>
+          <LandingRule />
+
+          {/* Five across only on real desktop. At tablet widths five columns
+              leave ~165px each and the titles start wrapping mid-phrase, so the
+              strip steps down to 3, then 2 on phone. No dividers, per Jenny —
+              a real column gap carries the separation instead. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(" + landingCols + ", minmax(0, 1fr))", columnGap: isPhone ? 22 : 40, rowGap: isPhone ? 30 : 40, marginTop: isPhone ? 34 : 52 }}>
+            {LANDING_SECTION_MARKS.map((f) => (
+              <div key={f.key} style={{ minWidth: 0 }}>
+                <i className={"ti " + f.icon} style={{ fontSize: 26, display: "block", marginBottom: 16 }} aria-hidden="true" />
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.55, color: COLORS.muted }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* The product section — Jenny's second block, demoted from a competing
+          hero to a section so the page has one clear entry headline. */}
+      <div style={{ borderTop: "1px solid " + COLORS.hairline, background: COLORS.paper }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 48 : 80, paddingBottom: isPhone ? 48 : 80, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.8fr) minmax(0, 1.2fr)", gap: isCompact ? 40 : 56, alignItems: "center" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={LANDING_EYEBROW}>Designed to disappear</div>
+            <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 46, margin: "14px 0 20px" }}>
+              More time creating,<br />less time managing.
+            </h2>
+            <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: 0, maxWidth: 440 }}>
+              Seamlessly track every project from inspiration to sale. An intuitive,
+              end-to-end record system built for makers of every kind, so you can
+              focus on your craft, not your tools.
+            </p>
+            <button onClick={() => jump("waitlist")} style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 10, background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}>
+              Join the waitlist
+              <i className="ti ti-arrow-right" style={{ fontSize: 15 }} aria-hidden="true" />
+            </button>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <LandingProjectMock compact={isCompact} />
+          </div>
+        </div>
+      </div>
+
+      {/* Waitlist — layout follows Jenny's reference: the vessel sits at the
+          far left and bleeds off the bottom edge of the band, headline and
+          copy stack beside it, and the form sits on the right. */}
+      <div id="waitlist" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16, background: COLORS.ink, color: COLORS.cream, overflow: "hidden" }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 40 : LANDING_BAND_PAD_Y, paddingBottom: isPhone ? 40 : LANDING_BAND_PAD_Y, display: "grid", gridTemplateColumns: isCompact ? "1fr" : LANDING_VASE_COL + "px minmax(0, 1.05fr) minmax(0, 0.95fr)", gap: isCompact ? 32 : 48, alignItems: "center" }}>
+          {/* The photograph, top-aligned with the "Early access" eyebrow and cut
+              off at exactly half by the band's bottom edge.
+
+              The cell stretches to the row height, so 200% + twice the band's
+              vertical padding is exactly twice the distance from the row's top
+              to the band's outer edge — meaning the half below that edge is
+              the half that gets clipped, at any row height. Absolute, so a
+              photo this tall can't stretch the band it's measuring itself
+              against. */}
+          {!isCompact && (
+            <div style={{ position: "relative", alignSelf: "stretch" }}>
+              <img
+                src="assets/vase-cutout.jpg"
+                alt=""
+                aria-hidden="true"
+                style={{
+                  position: "absolute", top: 0, left: 0, display: "block",
+                  height: "calc(200% + " + LANDING_BAND_PAD_Y * 2 + "px)",
+                  width: "auto",
+                }}
+              />
+            </div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...LANDING_EYEBROW, color: COLORS.lemon }}>Early access</div>
+            <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 32 : 40, margin: "14px 0 16px" }}>
+              Be the first to build with us.
+            </h2>
+            <p style={{ fontSize: 14.5, lineHeight: 1.6, color: LANDING_DARK_CARD.muted, margin: 0, maxWidth: 400 }}>
+              StudioCo is opening up slowly — we’re onboarding artists in small
+              batches while we build out the rest. Leave your email and we’ll
+              reach out.
+            </p>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <WaitlistForm dark stack />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ ...shell, padding: "28px " + pad + "px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <LandingWordmark size={20} />
+        <div style={{ display: "flex", gap: 26, flexWrap: "wrap" }}>
+          <a href="https://instagram.com/offline_jenny" target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none", color: COLORS.muted }}>Instagram</a>
+          <button onClick={onLogIn} style={{ ...navLink, color: COLORS.muted }}>Log in</button>
+        </div>
+        <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 StudioCo</div>
+      </div>
+
+    </div>
   );
 }
 
@@ -7678,8 +8170,11 @@ function App() {
 
   if (session) return <StudioApp onSignOut={() => { Auth.signOut(); }} email={session.email} />;
 
+  // Sign-up is deliberately unlinked while StudioCo is waitlist-only — the
+  // landing page offers "Join the waitlist" instead. AuthScreen still supports
+  // mode="signup" untouched, so restoring it is a one-line change.
   if (view === "landing") {
-    return <LandingScreen onLogIn={() => setView("login")} onSignUp={() => setView("signup")} />;
+    return <LandingScreen onLogIn={() => setView("login")} />;
   }
   return (
     <AuthScreen
