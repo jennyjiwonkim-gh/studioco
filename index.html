@@ -5,7 +5,7 @@
 <title>StudioCo — Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -96,6 +96,13 @@ const COLORS = {
 };
 
 const RADIUS = 3; // sharp, editorial — not 0, not soft
+
+/* Display face, for headlines only — Inter still carries every piece of UI,
+   body copy, label and control in the app. Jenny's call: the sans headlines
+   read flat on the public page, and a high-contrast garamond gives it the
+   editorial weight the rest of the system is aiming at. Used at large sizes
+   with tight leading; never below ~20px, where its thin strokes fall apart. */
+const SERIF = '"Cormorant Garamond", "Iowan Old Style", Georgia, serif';
 
 // Project accent = one hue each, used only as: left stripe, small dot, tag text.
 // Each resolves through a CSS variable so the hue stays recognisable in both
@@ -7492,16 +7499,16 @@ function AuthShell({ children, maxWidth }) {
    fill. The bands alternate between the two existing surface tokens only, so
    this page introduces no color the palette doesn't already have. */
 const LANDING_SECTION_MARKS = [
-  { key: "boards", step: "01 — Boards", icon: "urn", accent: "var(--accent-navy)",
-    title: "Project boards", desc: "Track every piece from first sketch to finished sale, and move between pieces without losing your place." },
-  { key: "schedule", step: "02 — Schedule", icon: "hourglass", accent: "var(--accent-royal)",
-    title: "Studio schedule", desc: "Plan today's tasks and see the week ahead without leaving the bench." },
-  { key: "inventory", step: "03 — Inventory", icon: "bottle", accent: "var(--accent-cobalt)",
-    title: "Inventory & listings", desc: "Know exactly what's finished, what's in progress, and what's ready to sell." },
-  { key: "marketing", step: "04 — Marketing", icon: "squiggly", accent: "var(--accent-lemon)",
-    title: "Content & marketing", desc: "Draft captions and plan posts without five different apps. Drive campaigns with data." },
-  { key: "sales", step: "05 — Sales", icon: "angular", accent: "var(--accent-tomato)",
-    title: "One studio, one place", desc: "Ship completed projects to your storefront in a click, and watch the practice grow." },
+  { key: "boards", icon: "ti-stack-2", title: "Project boards",
+    desc: "Track every piece from first sketch to finished sale, without losing your place." },
+  { key: "schedule", icon: "ti-calendar-month", title: "Studio schedule",
+    desc: "Plan today's tasks and see the week ahead without leaving the bench." },
+  { key: "inventory", icon: "ti-box", title: "Inventory & listings",
+    desc: "Know what's finished, what's in progress, and what's ready to sell." },
+  { key: "marketing", icon: "ti-photo", title: "Content & marketing",
+    desc: "Draft captions and plan posts without juggling five different apps." },
+  { key: "sales", icon: "ti-chart-bar", title: "One studio, one place",
+    desc: "Ship finished work to your storefront, and watch the practice grow." },
 ];
 
 /* The waitlist CTA is deliberately a dark card sitting on a light page, so it
@@ -7587,163 +7594,141 @@ function LandingWordmark({ size }) {
   );
 }
 
+/* Section eyebrow. Deliberately muted rather than accent-colored — the five
+   hues are reserved for project identity, and on a page with this many
+   sections an accent on every label was just noise. */
 const LANDING_EYEBROW = {
-  fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
-  textTransform: "uppercase", color: COLORS.royalBlue,
+  fontSize: 10.5, fontWeight: 600, letterSpacing: "0.16em",
+  textTransform: "uppercase", color: COLORS.muted,
 };
 
+/* Headlines only. Cormorant is a high-contrast face — it needs size and tight
+   leading to read as intended, so every use here is >= 26px. */
+const LANDING_DISPLAY = {
+  fontFamily: SERIF, fontWeight: 500, letterSpacing: "-0.005em", lineHeight: 1.08,
+};
+
+/* A short rule under a section headline, straight from Jenny's reference. */
+function LandingRule() {
+  return <div style={{ width: 34, height: 2, background: COLORS.ink, margin: "18px 0 0" }} />;
+}
+
 /* Small, flat recreations of real screens. Deliberately not screenshots —
-   they stay legible at any width and never go stale against the live app. */
-function LandingFeatureMock({ kind, compact, inverted }) {
-  // Bands alternate cream/paper, so the mock takes the opposite surface of the
-  // band it sits on — otherwise every second card would be white on white.
-  const surface = inverted ? COLORS.cream : COLORS.paper;
-  const sub = inverted ? COLORS.paper : COLORS.cream;
-  const card = { background: surface, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS };
-  const capLabel = { fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 10 };
-  const checkbox = { width: 12, height: 12, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 };
-
-  if (kind === "boards") {
-    return (
-      <div style={{ ...card, padding: "18px 20px", width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, borderLeft: "3px solid var(--accent-navy)", paddingLeft: 10 }}>Spring collection</span>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.muted }}>In progress</span>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: COLORS.hairline, border: "1px solid " + COLORS.hairline, marginBottom: 14 }}>
-          {[["Progress", "33%"], ["Target date", "Apr 12"], ["Priority", "High"], ["Pieces", "9"]].map(([k, v]) => (
-            <div key={k} style={{ background: surface, padding: "8px 10px" }}>
-              <div style={{ fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.muted }}>{k}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.tomato }}>{v}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ ...capLabel, marginBottom: 8 }}>Boards</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {["Inspiration", "Making", "Content", "Sales"].map((b, i) => (
-            <div key={b} style={{ background: sub, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, padding: "8px 12px", fontSize: 11.5, fontWeight: 600 }}>
-              <span style={{ color: COLORS.royalBlue, marginRight: 6 }}>{"0" + (i + 1)}</span>{b}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (kind === "schedule") {
-    // A five-day week leaves ~44px per column at 320px, which clips the task
-    // titles. The mock is illustrative, so phone shows a shorter span instead.
-    const allDays = [
-      { label: "MON 3", task: "Throw mugs", project: "Spring collection" },
-      { label: "TUE 4" },
-      { label: "WED 5", task: "Trim + handle", project: "Spring collection" },
-      { label: "THU 6" },
-      { label: "FRI 7", task: "Glaze load", project: "Material tests" },
-    ];
-    const days = compact ? allDays.slice(0, 3) : allDays;
-    return (
-      <div style={{ ...card, padding: "16px 18px", width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <span style={{ fontSize: 12, fontWeight: 700 }}>{compact ? "August 3 — 5" : "August 3 — 7"}</span>
-          <div style={{ display: "flex", gap: 4 }}>
-            <span style={{ fontSize: 8.5, fontWeight: 700, background: COLORS.ink, color: COLORS.cream, borderRadius: 2, padding: "3px 7px" }}>WEEK</span>
-            <span style={{ fontSize: 8.5, fontWeight: 700, color: COLORS.muted, padding: "3px 7px" }}>MONTH</span>
-          </div>
-        </div>
-        {/* minmax(0, …) rather than a bare 1fr: the task titles set a min-content
-            floor that otherwise pushes the day columns to uneven widths at 320px. */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(" + days.length + ", minmax(0, 1fr))", gap: 1, background: COLORS.hairline, border: "1px solid " + COLORS.hairline }}>
-          {days.map((d) => (
-            <div key={d.label} style={{ background: surface, minHeight: 128, padding: "6px 4px" }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: COLORS.muted, textAlign: "center", marginBottom: 6 }}>{d.label}</div>
-              {d.task && (
-                <div style={{ background: sub, borderLeft: "2px solid var(--accent-royal)", borderRadius: 2, padding: "5px 6px" }}>
-                  <div style={{ fontSize: 9.5, fontWeight: 700, lineHeight: 1.25 }}>{d.task}</div>
-                  <div style={{ fontSize: 8.5, color: COLORS.muted, marginTop: 2 }}>{d.project}</div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (kind === "inventory") {
-    return (
-      <div style={{ ...card, padding: "16px 18px", width: "100%" }}>
-        <div style={capLabel}>Listings</div>
-        <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "9px 12px", background: sub, borderBottom: "1px solid " + COLORS.hairline }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700 }}>
-              Ceramic mug set<span style={{ fontWeight: 400, color: COLORS.muted }}> · 2 of 6 sold</span>
-            </span>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.cobalt }}>LIVE</span>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, padding: 12 }}>
-            {[["Price", "$38", false], ["Views", "214", false], ["Revenue", "$76", true]].map(([k, v, hot]) => (
-              <div key={k}>
-                <div style={{ fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.muted }}>{k}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: hot ? COLORS.cobalt : COLORS.ink }}>{v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (kind === "marketing") {
-    return (
-      <div style={{ display: "grid", gap: 14, width: "100%" }}>
-        <div style={{ ...card, padding: "16px 18px" }}>
-          <div style={capLabel}>Content library</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            {[["Types", ["Carousel", "Reel", "Story"]], ["Series", ["Motivation Monday", "WIP Wednesday", "Feature Friday"]]].map(([h, items]) => (
-              <div key={h}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 }}>{h}</div>
-                {items.map((it) => (
-                  <div key={it} style={{ fontSize: 11, color: COLORS.muted, marginBottom: 7 }}>{it}</div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{ ...card, padding: "16px 18px" }}>
-          <div style={capLabel}>Post performance</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-            {[["Reach", "1.2k"], ["Engagement", "86"], ["Saves", "34"]].map(([k, v]) => (
-              <div key={k}>
-                <div style={{ fontSize: 8.5, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.muted }}>{k}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--accent-lemon)" }}>{v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // sales — the public storefront window StoreCo fills from here
+   they stay legible at any width and never go stale against the live app,
+   and they don't need photography the project doesn't have. */
+function LandingHomeMock({ compact }) {
+  const label = { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 };
   return (
-    <div style={{ ...card, padding: "16px 18px", width: "100%" }}>
-      <div style={capLabel}>Public studio page</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {[
-          { name: "Ridged vase", meta: "2026 · $120", icon: "trumpet", sold: true },
-          { name: "Studio pitcher", meta: "2026 · $140", icon: "bulbNeck", sold: false },
-        ].map((p) => (
-          <div key={p.name}>
-            <div style={{ background: sub, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, height: 118, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-              {p.sold && (
-                <span style={{ position: "absolute", top: 8, left: 8, fontSize: 8, fontWeight: 700, letterSpacing: "0.06em", background: surface, border: "1px solid " + COLORS.hairline, borderRadius: 2, padding: "2px 6px" }}>SOLD</span>
-              )}
-              <ProjectIcon icon={p.icon} color={COLORS.hairline} size={46} />
+    <div style={{ background: COLORS.paper, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden", boxShadow: "0 18px 48px rgba(17,17,17,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid " + COLORS.hairline }}>
+        <LandingWordmark size={18} />
+        <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>Home</span>
+      </div>
+      <div style={{ padding: compact ? "18px 16px" : "22px 20px" }}>
+        <div style={{ fontSize: 11, color: COLORS.muted, marginBottom: 4 }}>Wednesday, August 5</div>
+        <div style={{ ...LANDING_DISPLAY, fontSize: 26, margin: "0 0 18px" }}>Good morning, Jenny.</div>
+
+        <div style={{ ...label }}>My projects</div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr 1fr" : "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
+          {[
+            { name: "Moon jars", icon: "hourglass", accent: "var(--accent-navy)", pct: 40 },
+            { name: "Mushroom lamp", icon: "squiggly", accent: "var(--accent-tomato)", pct: 65 },
+            { name: "Oil dispenser", icon: "angular", accent: "var(--accent-cobalt)", pct: 20 },
+            { name: "Canyon mugs", icon: "trumpet", accent: "var(--accent-lemon)", pct: 80 },
+          ].map((p) => (
+            <div key={p.name} style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
+              <div style={{ background: COLORS.cream, height: 54, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ProjectIcon icon={p.icon} color={p.accent} size={26} />
+              </div>
+              <div style={{ padding: "7px 8px", borderTop: "1px solid " + COLORS.hairline }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                <div style={{ height: 3, background: COLORS.hairline, borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: p.pct + "%", background: p.accent }} />
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, marginTop: 6 }}>{p.name}</div>
-            <div style={{ fontSize: 10, color: COLORS.muted }}>{p.meta}</div>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "1fr 1fr", gap: 18 }}>
+          <div>
+            <div style={label}>Tasks</div>
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
+              {[
+                ["Trim foot", "Moon jars", "Today"],
+                ["Glaze test #2", "Moon jars", "May 2"],
+                ["Photo shoot", "Canyon mugs", "May 4"],
+              ].map(([t, proj, when]) => (
+                <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
+                  <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t}</span>
+                  <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{when}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+          <div>
+            <div style={label}>Supplies needed</div>
+            <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
+              {[["Porcelain, 25kg", "3 left"], ["Matte white glaze", "2"], ["Wire & ribs", "1"]].map(([n, q]) => (
+                <div key={n} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
+                  <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</span>
+                  <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{q}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LandingProjectMock({ compact }) {
+  const label = { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 };
+  return (
+    <div style={{ background: COLORS.paper, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden", boxShadow: "0 18px 48px rgba(17,17,17,0.07)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 16px", borderBottom: "1px solid " + COLORS.hairline }}>
+        <span style={{ fontSize: 10.5, color: COLORS.muted }}>Projects</span>
+        <span style={{ fontSize: 10.5, color: COLORS.muted }}>›</span>
+        <span style={{ fontSize: 10.5, fontWeight: 600 }}>Moon jars</span>
+      </div>
+      <div style={{ padding: compact ? "18px 16px" : "22px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <span style={{ ...LANDING_DISPLAY, fontSize: 28, borderLeft: "3px solid var(--accent-navy)", paddingLeft: 12 }}>Moon jars</span>
+          <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted, marginLeft: "auto" }}>In progress</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "180px 1fr", gap: 20 }}>
+          <div>
+            <div style={label}>Project details</div>
+            {[["Start date", "Apr 12"], ["Due date", "May 20"], ["Category", "Ceramics"], ["Pieces", "9"]].map(([k, v]) => (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: "1px solid " + COLORS.hairline }}>
+                <span style={{ fontSize: 10.5, color: COLORS.muted }}>{k}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600 }}>{v}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                <span style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted }}>Progress</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600 }}>40%</span>
+              </div>
+              <div style={{ height: 4, background: COLORS.hairline, borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: "40%", background: "var(--accent-navy)" }} />
+              </div>
+            </div>
+          </div>
+          <div>
+            <div style={label}>Gallery</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+              {["hourglass", "roundBulb", "trumpet", "bottle", "pear", "urn"].map((ic, i) => (
+                <div key={ic + i} style={{ background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, height: 62, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ProjectIcon icon={ic} color={COLORS.hairline} size={30} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -7753,262 +7738,163 @@ function LandingScreen({ onLogIn }) {
   const viewport = useViewport();
   const isPhone = viewport.isPhone;
   const isCompact = viewport.isCompact;
-  const pad = isPhone ? 20 : 32;
-  const shell = { maxWidth: 1200, margin: "0 auto", padding: "0 " + pad + "px" };
+  const pad = isPhone ? 20 : 40;
+  const shell = { maxWidth: 1240, margin: "0 auto", padding: "0 " + pad + "px" };
 
   const jump = (id) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const navLink = { fontSize: 13, fontWeight: 600, color: COLORS.ink, background: "none", border: "none", padding: 0, fontFamily: "inherit", cursor: "pointer" };
+  const navLink = { fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.ink, background: "none", border: "none", padding: 0, fontFamily: "inherit", cursor: "pointer" };
 
   return (
     <div style={{ fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, Arial, sans-serif', background: COLORS.cream, color: COLORS.ink, minHeight: "100vh", position: "relative", zIndex: 0 }}>
 
       {/* Nav */}
-      <div style={{ borderBottom: "1px solid " + COLORS.hairline }}>
-        <div style={{ ...shell, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "18px " + pad + "px" }}>
-          <LandingWordmark />
-          <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 16 : 26 }}>
-            {!isCompact && (
-              <React.Fragment>
-                <button onClick={() => jump("features")} style={navLink}>Features</button>
-                <button onClick={() => jump("preview")} style={navLink}>Preview</button>
-              </React.Fragment>
-            )}
-            <button onClick={onLogIn} style={navLink}>Log in</button>
-            {/* At 320px the wordmark + "Log in" + this button overflow the bar by
-                ~22px. Dropping it on phone costs nothing: the hero's identical
-                "Join the waitlist" button sits immediately below, already in view. */}
-            {!isPhone && (
-              <button onClick={() => jump("waitlist")} style={{ background: COLORS.ink, color: COLORS.cream, borderRadius: RADIUS, border: "none", padding: "9px 16px", fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
-                Join the waitlist
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Hero — the original landing copy, now spread across the full width */}
-      <div style={{ ...shell, paddingTop: isPhone ? 48 : 76, paddingBottom: isPhone ? 40 : 64 }}>
-        <h1 style={{ fontSize: isPhone ? 38 : 62, lineHeight: 1.04, fontWeight: 700, letterSpacing: "-0.025em", margin: "0 0 20px", maxWidth: 900 }}>
-          The quiet half of a{isPhone ? " " : <br />}making practice.
-        </h1>
-        <p style={{ fontSize: isPhone ? 16 : 18, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 30px", maxWidth: 620 }}>
-          A private studio workspace for people who make things by hand. Track a piece
-          from first sketch through glaze, filming, listing and sale — one place, no
-          spreadsheets.
-        </p>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <button onClick={() => jump("waitlist")} style={{ padding: "12px 24px", fontSize: 14, fontWeight: 700, fontFamily: "inherit", background: COLORS.ink, color: COLORS.cream, border: "none", borderRadius: RADIUS, cursor: "pointer" }}>
-            Join the waitlist
-          </button>
-          <button onClick={onLogIn} style={{ padding: "12px 24px", fontSize: 14, fontWeight: 600, fontFamily: "inherit", background: "transparent", color: COLORS.ink, border: "1px solid " + COLORS.ink, borderRadius: RADIUS, cursor: "pointer" }}>
-            Log in
-          </button>
-        </div>
-
-        <div style={{ marginTop: 44, paddingTop: 24, borderTop: "1px solid " + COLORS.hairline, display: "grid", gridTemplateColumns: isPhone ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: isPhone ? 20 : 32, maxWidth: 820 }}>
-          {[
-            ["Every stage", "Inspiration through to learnings"],
-            ["Every device", "Your studio syncs everywhere"],
-            ["Private by default", "Only you can see your work"],
-          ].map(([title, sub]) => (
-            <div key={title}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 5 }}>{title}</div>
-              <div style={{ fontSize: 13, color: COLORS.muted, lineHeight: 1.45 }}>{sub}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Second hero — the product pitch, with the vessel mark carried through */}
-      <div style={{ borderTop: "1px solid " + COLORS.hairline, background: COLORS.paper }}>
-        <div style={{ ...shell, paddingTop: isPhone ? 48 : 72, paddingBottom: isPhone ? 48 : 72, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "1fr 260px", gap: isCompact ? 32 : 24, alignItems: "center" }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ ...LANDING_EYEBROW, marginBottom: 16 }}>For working artists</div>
-            <h2 style={{ fontSize: isPhone ? 32 : 46, lineHeight: 1.05, fontWeight: 700, letterSpacing: "-0.02em", margin: "0 0 20px" }}>
-              Your whole studio,{isPhone ? " " : <br />}
-              <span style={{ color: COLORS.tomato }}>in one place.</span>
-            </h2>
-            <p style={{ fontSize: isPhone ? 15 : 17, lineHeight: 1.55, color: COLORS.muted, margin: "0 0 30px", maxWidth: 540 }}>
-              Seamlessly track every project from inspiration to sale, without the
-              spreadsheets. An intuitive, end-to-end record system built for makers of
-              every kind, so you can spend less time managing and more time creating.
-            </p>
-            <WaitlistForm />
-            <button onClick={() => jump("preview")} style={{ marginTop: 20, background: "none", border: "none", borderBottom: "1px solid " + COLORS.ink, padding: "0 0 2px", fontSize: 14, fontWeight: 600, fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}>
-              See how it works ↓
-            </button>
-          </div>
-          {/* Solid vessel on the plain surface, matching how HeroVessel /
-              PageBackgroundIcon draw large icons everywhere else — no wash. */}
+      <div style={{ ...shell, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: (isPhone ? "18px " : "26px ") + pad + "px" }}>
+        <LandingWordmark />
+        <div style={{ display: "flex", alignItems: "center", gap: isCompact ? 18 : 30 }}>
           {!isCompact && (
-            <div aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-              <ProjectIcon icon="urn" color={COLORS.tomato} size={230} />
-            </div>
+            <React.Fragment>
+              <button onClick={() => jump("features")} style={navLink}>Features</button>
+              <button onClick={() => jump("preview")} style={navLink}>Preview</button>
+            </React.Fragment>
+          )}
+          <button onClick={onLogIn} style={navLink}>Log in</button>
+          {!isPhone && (
+            <button onClick={() => jump("waitlist")} style={{ background: COLORS.ink, color: COLORS.cream, border: "none", borderRadius: RADIUS, padding: "13px 22px", fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>
+              Join the waitlist
+            </button>
           )}
         </div>
       </div>
 
-      {/* Built for artists — the five accents, one per capability */}
-      <div style={{ borderTop: "1px solid " + COLORS.hairline }}>
-        <div style={{ ...shell, paddingTop: isPhone ? 48 : 72, paddingBottom: isPhone ? 48 : 72, textAlign: "center" }}>
-          <div style={{ ...LANDING_EYEBROW, marginBottom: 10 }}>Built for artists</div>
-          <h2 style={{ fontSize: isPhone ? 24 : 30, fontWeight: 700, letterSpacing: "-0.015em", margin: "0 0 40px" }}>
-            Everything you need, in one place.
+      {/* Hero — headline left, the real Home screen recreated on the right */}
+      <div style={{ ...shell, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : 56, alignItems: "center" }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 46 : 68, margin: "0 0 24px" }}>
+            The quiet half of a making practice.
+          </h1>
+          <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 28px", maxWidth: 440 }}>
+            A private studio workspace for people who make things by hand. Track a
+            piece from first sketch through glaze, filming, listing and sale — one
+            place, no spreadsheets.
+          </p>
+          <WaitlistForm />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 18px", marginTop: 20, fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.muted }}>
+            <span>Every stage</span>
+            <span aria-hidden="true">·</span>
+            <span>Every device</span>
+            <span aria-hidden="true">·</span>
+            <span>Private by default</span>
+          </div>
+        </div>
+        <div id="preview" style={{ minWidth: 0, scrollMarginTop: 20 }}>
+          <LandingHomeMock compact={isCompact} />
+        </div>
+      </div>
+
+      {/* Built for artists — left-aligned to the same margin as the hero */}
+      <div id="features" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16 }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 48 : 76, paddingBottom: isPhone ? 40 : 64 }}>
+          <div style={LANDING_EYEBROW}>Built for artists</div>
+          <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 44, margin: "14px 0 0" }}>
+            Everything in its place.
           </h2>
-          <div style={{ display: "grid", gridTemplateColumns: isPhone ? "1fr 1fr" : "repeat(auto-fit, minmax(170px, 1fr))", gap: isPhone ? 24 : 32, textAlign: "left" }}>
-            {LANDING_SECTION_MARKS.map((f) => (
-              <div key={f.key}>
-                <div style={{ marginBottom: 12 }}>
-                  <ProjectIcon icon={f.icon} color={f.accent} size={28} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{f.title}</div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.5, color: COLORS.muted }}>{f.desc}</div>
+          <LandingRule />
+
+          <div style={{ display: "grid", gridTemplateColumns: isPhone ? "1fr 1fr" : "repeat(5, minmax(0, 1fr))", gap: 0, marginTop: isPhone ? 36 : 52 }}>
+            {LANDING_SECTION_MARKS.map((f, i) => (
+              <div
+                key={f.key}
+                style={{
+                  padding: isPhone ? "18px 14px" : "0 26px",
+                  // Hairline rules between columns, as in the reference. On phone
+                  // the grid is 2-up, so the divider follows column position
+                  // rather than index.
+                  borderLeft: (isPhone ? i % 2 !== 0 : i !== 0) ? "1px solid " + COLORS.hairline : "none",
+                  paddingLeft: i === 0 && !isPhone ? 0 : undefined,
+                  minWidth: 0,
+                }}
+              >
+                <i className={"ti " + f.icon} style={{ fontSize: 26, display: "block", marginBottom: 16 }} aria-hidden="true" />
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.55, color: COLORS.muted }}>{f.desc}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* App preview — a flat recreation of Home */}
-      <div id="preview" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16 }}>
-        <div style={{ ...shell, paddingTop: isPhone ? 48 : 72, paddingBottom: isPhone ? 48 : 88 }}>
-          <div style={{ background: COLORS.paper, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid " + COLORS.hairline }}>
-              <LandingWordmark size={20} />
-              <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: "auto" }}>Home</span>
-            </div>
-            <div style={{ padding: isPhone ? "22px 18px" : "30px 28px", display: "grid", gridTemplateColumns: isCompact ? "1fr" : "1fr 1fr 1fr", gap: 24 }}>
-              <div>
-                <div style={{ ...LANDING_EYEBROW, fontSize: 10, letterSpacing: "0.08em", marginBottom: 6 }}>Wednesday, August 5</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.tomato, marginBottom: 16 }}>3 things to finish today.</div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 }}>Today</div>
-                <div style={{ background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
-                  {[
-                    { title: "Finish batch 3 pieces", project: "Spring collection", accent: "var(--accent-navy)" },
-                    { title: "Test new glazes", project: "Material tests", accent: "var(--accent-cobalt)" },
-                    { title: "Photograph finished work", project: "Autumn series", accent: "var(--accent-tomato)" },
-                  ].map((t) => (
-                    <div key={t.title} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderLeft: "3px solid " + t.accent }}>
-                      <div style={{ width: 14, height: 14, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }}></div>
-                      <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>{t.title}</span>
-                      <span style={{ fontSize: 10.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{t.project}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 }}>Project progress</div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {[
-                    { name: "Spring collection", pct: 70, accent: "var(--accent-navy)" },
-                    { name: "Autumn series", pct: 35, accent: "var(--accent-tomato)" },
-                    { name: "Material tests", pct: 90, accent: "var(--accent-cobalt)" },
-                  ].map((p) => (
-                    <div key={p.name} style={{ background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, padding: "12px 14px", borderLeft: "3px solid " + p.accent }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 700 }}>{p.name}</span>
-                        <span style={{ fontSize: 11, color: COLORS.muted }}>{p.pct}%</span>
-                      </div>
-                      <div style={{ height: 4, background: COLORS.hairline, borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: p.pct + "%", background: p.accent }}></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: COLORS.muted, marginBottom: 8 }}>Supplies needed</div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {[
-                    { project: "Spring collection", count: "2 items", accent: "var(--accent-navy)", items: [["Porcelain, 25kg", "3 left"], ["Wire & ribs", "1"]] },
-                    { project: "Autumn series", count: "1 item", accent: "var(--accent-tomato)", items: [["Matte white glaze", "2"]] },
-                  ].map((s) => (
-                    <div key={s.project} style={{ background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, borderLeft: "3px solid " + s.accent }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid " + COLORS.hairline }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 700 }}>{s.project}</span>
-                        <span style={{ fontSize: 10.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{s.count}</span>
-                      </div>
-                      {s.items.map(([name, qty]) => (
-                        <div key={name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px" }}>
-                          <div style={{ width: 12, height: 12, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }}></div>
-                          <span style={{ fontSize: 12, flex: 1 }}>{name}</span>
-                          <span style={{ fontSize: 10.5, color: COLORS.muted }}>{qty}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+      {/* The product section — Jenny's second block, demoted from a competing
+          hero to a section so the page has one clear entry headline. */}
+      <div style={{ borderTop: "1px solid " + COLORS.hairline, background: COLORS.paper }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 48 : 80, paddingBottom: isPhone ? 48 : 80, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.8fr) minmax(0, 1.2fr)", gap: isCompact ? 40 : 56, alignItems: "center" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={LANDING_EYEBROW}>For working artists</div>
+            <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 34 : 46, margin: "14px 0 20px" }}>
+              Your whole studio, in one place.
+            </h2>
+            <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: 0, maxWidth: 440 }}>
+              Seamlessly track every project from inspiration to sale, without the
+              spreadsheets. An intuitive, end-to-end record system built for makers
+              of every kind, so you can spend less time managing and more time
+              creating.
+            </p>
+            <button onClick={() => jump("waitlist")} style={{ marginTop: 28, display: "inline-flex", alignItems: "center", gap: 10, background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", color: COLORS.ink, cursor: "pointer" }}>
+              Join the waitlist
+              <i className="ti ti-arrow-right" style={{ fontSize: 15 }} aria-hidden="true" />
+            </button>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <LandingProjectMock compact={isCompact} />
           </div>
         </div>
-      </div>
-
-      {/* Features — alternating bands, one accent each */}
-      <div id="features" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16 }}>
-        <div style={{ ...shell, paddingTop: isPhone ? 48 : 80, paddingBottom: isPhone ? 32 : 48 }}>
-          <div style={{ ...LANDING_EYEBROW, marginBottom: 10 }}>What it does</div>
-          <h2 style={{ fontSize: isPhone ? 26 : 36, fontWeight: 700, letterSpacing: "-0.02em", margin: "0 0 18px", maxWidth: 760 }}>
-            Built for the way a studio actually runs.
-          </h2>
-          <p style={{ fontSize: isPhone ? 15 : 17, lineHeight: 1.6, color: COLORS.muted, margin: 0, maxWidth: 640 }}>
-            Every creative project deserves to become a finished work, a story worth
-            sharing, and an opportunity to grow. StudioCo isn't another productivity
-            app; it moves with you and your workflow.
-          </p>
-        </div>
-
-        {LANDING_SECTION_MARKS.map((f, i) => {
-          const inverted = i % 2 === 1; // alternate the two surface tokens, no new colors
-          return (
-          <div key={f.key} style={{ borderTop: "1px solid " + COLORS.hairline, background: inverted ? COLORS.paper : COLORS.cream, display: "flex", flexDirection: isCompact ? "column" : (i % 2 === 0 ? "row" : "row-reverse"), alignItems: "stretch" }}>
-            <div style={{ flex: "1 1 50%", display: "flex", alignItems: "center", justifyContent: "center", padding: isPhone ? "28px 20px" : 40, minWidth: 0 }}>
-              <LandingFeatureMock kind={f.key} compact={isPhone} inverted={inverted} />
-            </div>
-            <div style={{ flex: "1 1 50%", display: "flex", flexDirection: "column", justifyContent: "center", padding: isPhone ? "32px 20px" : (isCompact ? "40px 32px" : "56px 64px"), minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: f.accent, marginBottom: 14 }}>{f.step}</div>
-              <h3 style={{ fontSize: isPhone ? 24 : 30, fontWeight: 700, letterSpacing: "-0.02em", margin: "0 0 14px", maxWidth: 420 }}>{f.title}</h3>
-              <p style={{ fontSize: 15, lineHeight: 1.6, color: COLORS.muted, margin: 0, maxWidth: 420 }}>{f.desc}</p>
-            </div>
-          </div>
-          );
-        })}
       </div>
 
       {/* Waitlist */}
-      <div id="waitlist" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16 }}>
-        <div style={{ ...shell, paddingTop: isPhone ? 48 : 80, paddingBottom: isPhone ? 48 : 80 }}>
-          <div style={{ background: COLORS.ink, color: COLORS.cream, borderRadius: RADIUS, padding: isPhone ? "32px 24px" : "44px 48px", display: "grid", gridTemplateColumns: isCompact ? "1fr" : "1fr 360px", gap: isPhone ? 28 : 40, alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: COLORS.lemon, marginBottom: 12 }}>Early access</div>
-              <h2 style={{ fontSize: isPhone ? 24 : 30, fontWeight: 700, letterSpacing: "-0.02em", margin: "0 0 12px" }}>
-                StudioCo is opening up slowly.
+      <div id="waitlist" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16, background: COLORS.ink, color: COLORS.cream }}>
+        <div style={{ ...shell, paddingTop: isPhone ? 48 : 76, paddingBottom: isPhone ? 48 : 76, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 1fr) minmax(0, 1fr)", gap: isCompact ? 32 : 56, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isPhone ? 18 : 28, minWidth: 0 }}>
+            {/* Reads as a ceramic silhouette, like the vase photo in the
+                reference. Lemon here was a loud yellow blob — the accent is
+                better spent on the small eyebrow than a 130px shape. */}
+            {!isPhone && (
+              <div aria-hidden="true" style={{ flexShrink: 0 }}>
+                <ProjectIcon icon="roundBulb" color={LANDING_DARK_CARD.muted} size={132} />
+              </div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...LANDING_EYEBROW, color: COLORS.lemon }}>Early access</div>
+              <h2 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 32 : 42, margin: "14px 0 0" }}>
+                Be the first to build with us.
               </h2>
-              <p style={{ fontSize: 14.5, lineHeight: 1.55, color: LANDING_DARK_CARD.muted, margin: 0, maxWidth: 460 }}>
-                We're onboarding artists in small batches while we build out the rest.
-                Leave your email and we'll reach out.
-              </p>
             </div>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 14.5, lineHeight: 1.6, color: LANDING_DARK_CARD.muted, margin: "0 0 20px", maxWidth: 420 }}>
+              StudioCo is opening up slowly — we're onboarding artists in small
+              batches while we build out the rest. Leave your email and we'll
+              reach out.
+            </p>
             <WaitlistForm dark stack />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 11.5, color: LANDING_DARK_CARD.muted }}>
+              <i className="ti ti-lock" style={{ fontSize: 13 }} aria-hidden="true" />
+              We'll never spam you. Unsubscribe anytime.
+            </div>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div style={{ borderTop: "1px solid " + COLORS.hairline }}>
-        <div style={{ ...shell, padding: "28px " + pad + "px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-          <LandingWordmark size={20} />
-          <div style={{ display: "flex", gap: 24 }}>
-            <a href="https://instagram.com/offline_jenny" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, textDecoration: "none", color: COLORS.muted }}>Instagram</a>
-            <button onClick={onLogIn} style={{ ...navLink, fontSize: 12.5, fontWeight: 400, color: COLORS.muted }}>Log in</button>
-          </div>
-          <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 StudioCo</div>
+      <div style={{ ...shell, padding: "28px " + pad + "px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <LandingWordmark size={20} />
+        <div style={{ display: "flex", gap: 26, flexWrap: "wrap" }}>
+          <a href="https://instagram.com/offline_jenny" target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none", color: COLORS.muted }}>Instagram</a>
+          <button onClick={onLogIn} style={{ ...navLink, color: COLORS.muted }}>Log in</button>
         </div>
+        <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 StudioCo</div>
       </div>
 
     </div>

@@ -26,6 +26,12 @@ by it. Do not merge them.
 ## Design north star
 
 Bauhaus-editorial. Inter; `border-radius: 3px` (sharp, not 0, not soft).
+
+**Display face:** headlines on the public landing page use **Cormorant
+Garamond** (`SERIF` in `index.html`) — Jenny's call, added 2026-08-07, because
+the sans headlines read flat on a marketing page. It is a high-contrast face:
+use it only at large sizes (>= 26px) with tight leading, never for UI, labels,
+controls or body copy. Everything inside the app proper is still Inter.
 Cream `#F8F6F1` background. Project identity is carried by a **colored left-border
 stripe** plus a vessel silhouette icon — never by tinted background fills.
 
