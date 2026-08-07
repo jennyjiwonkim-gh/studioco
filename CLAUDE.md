@@ -86,6 +86,15 @@ single-file app). Expired access tokens refresh once and retry automatically.
   vendor the libs.
 - The file must be named **`index.html`** — web servers serve that by default;
   any other name 404s at the site root.
+- In Git Bash, `python` resolves to the Windows Store app-execution-alias
+  stub, not a real interpreter — it just prints an install prompt and exits,
+  it does not serve anything. Use PowerShell's `python.exe` directly, or a
+  small PowerShell `System.Net.HttpListener` script as a static file server.
+- Netlify deploy previews for this project require SSO team login to open
+  directly in a browser (non-production access control), on top of the
+  app's own Supabase auth gate. Don't try to click through a preview URL to
+  confirm a deploy — check `commit_ref` and `state` via the Netlify API/MCP
+  reader instead (`get-deploy-for-site`).
 - `.claude/settings.local.json`'s git permission allowlist is intentionally
   narrow (status/diff/log/show/add/commit -m/branch listing/checkout -b/
   checkout main/fetch/remote -v/ls-files/ls-remote/stash list & push/plain
