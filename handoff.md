@@ -1,7 +1,7 @@
-# StudioCo Handoff
+# MOA Studio Handoff
 
 ## Overall Goal
-StudioCo is Jenny's private, single-file React + Babel-standalone ceramic-studio
+MOA Studio is Jenny's private, single-file React + Babel-standalone ceramic-studio
 management app (`index.html` at repo root, no build step), deployed via
 Netlify (auto-builds from GitHub on push to `main`), backed by Supabase for
 persistence.

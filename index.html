@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>StudioCo — Prototype</title>
+<title>MOA Studio — Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
@@ -565,7 +565,7 @@ async function loadAllPersisted() {
     } catch (e) {
       // The row existed but its contents were corrupt/unparseable. That IS
       // worth a warning — fall back to the seed and let the user keep working.
-      console.warn("StudioCo: discarding unreadable saved data for", key, e);
+      console.warn("MOA Studio: discarding unreadable saved data for", key, e);
     }
   }
   return out;
@@ -622,7 +622,7 @@ async function savePersisted(key, value, keepalive) {
       body: JSON.stringify({ user_id: storeUserId, key, value: JSON.stringify(value), updated_at: new Date().toISOString() }),
     });
     if (!res.ok) {
-      console.warn("StudioCo: could not save", key, await res.text());
+      console.warn("MOA Studio: could not save", key, await res.text());
       pendingRetries.set(key, value);
       publishSaveStatus("error");
       scheduleRetry();
@@ -632,7 +632,7 @@ async function savePersisted(key, value, keepalive) {
     if (pendingRetries.size === 0) publishSaveStatus("ok");
     return true;
   } catch (e) {
-    console.warn("StudioCo: could not save", key, e);
+    console.warn("MOA Studio: could not save", key, e);
     pendingRetries.set(key, value);
     publishSaveStatus("error");
     scheduleRetry();
@@ -744,7 +744,7 @@ const CONTENT_LIBRARY_SEED = {
 /* Resolves window.storage once, then hands AppInner fully-formed initial
    values. This is the async gate: nothing in AppInner (or any board under
    it) ever has to know storage is async, because it never mounts until the
-   real values — synced from wherever else this account has used StudioCo —
+   real values — synced from wherever else this account has used MOA Studio —
    are already in hand. */
 function StudioApp({ onSignOut, email }) {
   const [ready, setReady] = React.useState(false);
@@ -967,7 +967,7 @@ function SaveStatusIndicator({ phone }) {
   if (status !== "error") return null;
   return (
     <div
-      title="Some changes haven't saved yet. StudioCo will keep retrying automatically — keep this tab open until it clears."
+      title="Some changes haven't saved yet. MOA Studio will keep retrying automatically — keep this tab open until it clears."
       style={{ display: "flex", alignItems: "center", gap: 5, color: COLORS.tomato, fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}
     >
       <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} aria-hidden="true" />
@@ -997,7 +997,7 @@ function TopBar({ onLogoClick, onMenuClick, theme, onToggleTheme, viewport }) {
           </div>
           {!phone && (
             <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              StudioCo
+              MOA Studio
             </span>
           )}
         </div>
@@ -4505,7 +4505,7 @@ async function deletePhotoFromStorage(path) {
       body: JSON.stringify({ prefixes: [path] }),
     });
   } catch (e) {
-    console.warn("StudioCo: could not delete photo from storage", path, e);
+    console.warn("MOA Studio: could not delete photo from storage", path, e);
   }
 }
 
@@ -4544,7 +4544,7 @@ function ProductPage({ project, content, setContent, onBack }) {
       if (r.status === "fulfilled") {
         newPhotos.push(r.value);
       } else {
-        console.warn("StudioCo: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
+        console.warn("MOA Studio: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
         failed.push(files[i].name);
       }
     });
@@ -7471,7 +7471,7 @@ function ToolButton({ active, onClick, title, children }) {
 }
 
 /* ---------- Auth screens ----------
-   Public face of StudioCo. Deliberately in the same editorial language as the
+   Public face of MOA Studio. Deliberately in the same editorial language as the
    app itself — Inter, 3px radius, cream paper, one accent — so signing in
    doesn't feel like a different product from the studio behind it. */
 function AuthShell({ children, maxWidth }) {
@@ -7483,7 +7483,7 @@ function AuthShell({ children, maxWidth }) {
 }
 
 /* ---------- Landing page ----------
-   Public face of StudioCo, and the only screen a signed-out visitor sees.
+   Public face of MOA Studio, and the only screen a signed-out visitor sees.
    Built in the app's own language — Inter, 3px radius, cream paper, the five
    accent hues, vessel silhouettes for every icon — rather than a separate
    marketing style, so signing in doesn't feel like a different product.
@@ -7598,7 +7598,7 @@ function LandingWordmark({ size }) {
       <div style={{ width: box, height: box, background: COLORS.ink, borderRadius: RADIUS, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <ProjectIcon icon="urn" color={COLORS.lemon} size={Math.round(box * 0.56)} />
       </div>
-      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>StudioCo</span>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>MOA Studio</span>
     </div>
   );
 }
@@ -7970,7 +7970,7 @@ function LandingScreen({ onLogIn }) {
               Be the first to build with us.
             </h2>
             <p style={{ fontSize: 14.5, lineHeight: 1.6, color: LANDING_DARK_CARD.muted, margin: 0, maxWidth: 400 }}>
-              StudioCo is opening up slowly — we’re onboarding artists in small
+              MOA Studio is opening up slowly — we’re onboarding artists in small
               batches while we build out the rest. Leave your email and we’ll
               reach out.
             </p>
@@ -7988,7 +7988,7 @@ function LandingScreen({ onLogIn }) {
           <a href="https://instagram.com/offline_jenny" target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none", color: COLORS.muted }}>Instagram</a>
           <button onClick={onLogIn} style={{ ...navLink, color: COLORS.muted }}>Log in</button>
         </div>
-        <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 StudioCo</div>
+        <div style={{ fontSize: 11.5, color: COLORS.muted }}>© 2026 MOA Studio</div>
       </div>
 
     </div>
@@ -8079,7 +8079,7 @@ function App() {
 
   if (session) return <StudioApp onSignOut={() => { Auth.signOut(); }} email={session.email} />;
 
-  // Sign-up is deliberately unlinked while StudioCo is waitlist-only — the
+  // Sign-up is deliberately unlinked while MOA Studio is waitlist-only — the
   // landing page offers "Join the waitlist" instead. AuthScreen still supports
   // mode="signup" untouched, so restoring it is a one-line change.
   if (view === "landing") {
