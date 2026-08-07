@@ -59,6 +59,19 @@ debounced and go through `savePersisted`. Auth is Supabase email/password via
 the REST API (no client SDK — it does not work as a plain CDN script in a
 single-file app). Expired access tokens refresh once and retry automatically.
 
+One table sits outside that model: `waitlist_signups` (`id`, `email`,
+`created_at`), written by the public landing page's "Join the waitlist" form
+via `submitWaitlistEmail` — the only write in the app that runs **without** a
+session. It grants `anon`/`authenticated` **INSERT only**, with a matching
+insert RLS policy and no SELECT/UPDATE/DELETE grant, so signups can be added
+from the public page but the list can never be read back over the public API.
+Read it from the Supabase dashboard/service role. Note that RLS and the table
+`GRANT` are both required — a policy alone still returns `42501`.
+
+There is no migrations directory in this repo; schema changes are applied
+straight to Supabase (same as the original `app_state` table) and documented
+here.
+
 ## Testing methodology
 
 1. Extract the JSX from the `<script type="text/babel">` block and syntax-check
@@ -84,6 +97,23 @@ single-file app). Expired access tokens refresh once and retry automatically.
   z-index: 0`.
 - Locally-opened `file://` pages break CDN-loaded libraries. Test deployed, or
   vendor the libs.
+- Chrome on Windows refuses to size a window narrower than ~545px, so
+  `resize_window` **cannot** actually test the 320px breakpoint — it silently
+  reports success while `window.innerWidth` stays ~545. Load the page inside a
+  320px-wide `<iframe>` instead: the inner document gets a genuine 320px
+  viewport. Then assert on
+  `documentElement.scrollWidth - clientWidth` for horizontal overflow, and walk
+  the elements comparing `getBoundingClientRect().right` to find which one
+  overflows. This caught a real 22px nav overflow that eyeballing missed.
+- A bare `1fr` grid track has a min-content floor, so long cell text silently
+  pushes columns to uneven widths at narrow viewports. Use `minmax(0, 1fr)`
+  whenever the cells contain wrapping text.
+- `{/* … */}` is a JSX comment and is only valid where JSX *children* are
+  expected. Inside the parens of `{cond && ( … )}` it parses as a block
+  statement and Babel fails with `Unexpected token, expected ","`. Use a plain
+  `/* … */` there, or move the comment above the `{cond && (`. Babel's reported
+  line numbers are relative to the inline `<script>`, not the file — add the
+  script's start line (~70) to map them back.
 - The file must be named **`index.html`** — web servers serve that by default;
   any other name 404s at the site root.
 - `.claude/settings.local.json`'s git permission allowlist is intentionally
