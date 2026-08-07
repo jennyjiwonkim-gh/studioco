@@ -31,10 +31,12 @@ Steps:
 4. Verify: local server, 1280 + 390 + a true 320px viewport, screenshot every
    change. ✅ done. Two real bugs found and fixed at 320px (a 22px nav
    overflow, and uneven calendar columns).
-5. **Next: Jenny's visual review.** She has not seen the rendered page yet —
-   only the code and a description of it. Expect changes.
-6. Then: a Netlify deploy preview for the branch, and a merge decision.
-   Nothing here has been pushed to `main`.
+5. Open a PR + deploy preview. ✅ **PR #4**, preview confirmed `ready` at
+   `https://deploy-preview-4--studioco-app.netlify.app` (`commit_ref`
+   `d7682b3`, `error_message: null`). Opened for review, **not for merging**.
+6. **Next: Jenny's visual review.** She has not seen the rendered page yet —
+   only the code, screenshots, and a description. Expect changes.
+7. Then: the merge decision. Nothing here has been pushed to `main`.
 
 ## Also still open — previous initiative, not abandoned
 

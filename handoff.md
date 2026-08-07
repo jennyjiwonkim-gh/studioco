@@ -8,8 +8,12 @@ persistence.
 
 ## Current Status (as of this session, 2026-08-07)
 - Branch **`landing-page-redesign`**, cut from `origin/main` (not from the
-  older PR branch), one code commit: `06da477`. **No PR opened yet**, and
-  nothing pushed to `main` — no production deploy, no credits spent.
+  older PR branch). **PR #4 is open** against `main`, deliberately not merged.
+  Nothing pushed to `main` — no production deploy, no credits spent.
+- Deploy preview confirmed `ready` via the Netlify API (`commit_ref`
+  `d7682b3`, `error_message: null`):
+  `https://deploy-preview-4--studioco-app.netlify.app` — needs Netlify SSO
+  team login to open, on top of the app's own auth gate.
 - The work: the pre-login public landing page has been rebuilt, and waitlist
   signups now really persist. See `PLAN.md` for the initiative.
 - **Jenny has not seen the rendered page yet** — she chose the structure and
@@ -51,8 +55,9 @@ persistence.
 - Neutral cream/paper bands instead of the mockup's pastel tints.
 
 ## Next Steps
-1. **Jenny reviews the rendered page** — locally (see below) or via a preview.
-2. Open a PR / deploy preview for `landing-page-redesign` once she's happy.
+1. **Jenny reviews the rendered page** — via the PR #4 deploy preview above,
+   or locally.
+2. Apply whatever she wants changed, then the merge decision on PR #4.
 3. Separately, **PR #3 is still open and unmerged** (see `PLAN.md`).
 
 ## Testing Environment Notes (carries forward)
