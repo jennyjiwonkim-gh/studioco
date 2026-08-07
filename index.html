@@ -7511,6 +7511,12 @@ const LANDING_SECTION_MARKS = [
     desc: "Understand what’s working and make smarter creative decisions." },
 ];
 
+/* Waitlist band geometry. ProjectIcon draws on a 24x26 viewBox, so its
+   rendered height is size * 26/24 — the half-height crop depends on that. */
+const LANDING_BAND_PAD_Y = 44;
+const LANDING_VASE_SIZE = 240;
+const LANDING_VASE_H = LANDING_VASE_SIZE * (26 / 24);
+
 /* The waitlist CTA is deliberately a dark card sitting on a light page, so it
    can't read COLORS.* — those resolve to light values on this always-light
    screen. These mirror the [data-theme="dark"] tokens in <style> by value;
@@ -7602,18 +7608,25 @@ const LANDING_EYEBROW = {
   textTransform: "uppercase", color: COLORS.muted,
 };
 
+/* Page width and the hero's column gutter. These three are read together by
+   LANDING_HERO_PHOTO_LEFT below, so change them here rather than inline. */
+const LANDING_MAX_W = 1400;   // shell max-width
+const LANDING_PAD = 40;       // shell side padding above phone
+const LANDING_HERO_GAP = 96;  // hero grid gutter — the "daylight" either side
+
 /* Left edge of the hero photograph, expressed against the full-width wrapper.
-   Mirrors the hero grid so the photo starts in the middle of the gutter
-   between the copy and the Home preview, at every viewport width:
+   Mirrors the hero grid so the photo starts in the middle of that gutter at
+   every viewport width:
 
-     shell is max-width 1240 centred, 40px side padding
-     grid is 0.85fr / 1.15fr with a 56px gap, so the copy column is
-     0.85 / 2.0 = 0.425 of the space left after the gap
+     shell is max-width LANDING_MAX_W, centred, LANDING_PAD side padding
+     grid is 0.85fr / 1.15fr, so the copy column is 0.85 / 2.0 = 0.425 of
+     whatever is left after the gap
 
-   Only used above 1024px, where the hero is two columns and padding is 40. */
+   Only used above 1024px, where the hero is two columns. */
 const LANDING_HERO_PHOTO_LEFT =
-  "calc(max(0px, (100% - 1240px) / 2) + 40px" +
-  " + 0.425 * (min(100% - 80px, 1160px) - 56px) + 28px)";
+  "calc(max(0px, (100% - " + LANDING_MAX_W + "px) / 2) + " + LANDING_PAD + "px" +
+  " + 0.425 * (min(100% - " + LANDING_PAD * 2 + "px, " + (LANDING_MAX_W - LANDING_PAD * 2) + "px)" +
+  " - " + LANDING_HERO_GAP + "px) + " + LANDING_HERO_GAP / 2 + "px)";
 
 /* Headlines only. Cormorant is a high-contrast face — it needs size and tight
    leading to read as intended, so every use here is >= 26px. */
@@ -7751,8 +7764,8 @@ function LandingScreen({ onLogIn }) {
   const viewport = useViewport();
   const isPhone = viewport.isPhone;
   const isCompact = viewport.isCompact;
-  const pad = isPhone ? 20 : 40;
-  const shell = { maxWidth: 1240, margin: "0 auto", padding: "0 " + pad + "px" };
+  const pad = isPhone ? 20 : LANDING_PAD;
+  const shell = { maxWidth: LANDING_MAX_W, margin: "0 auto", padding: "0 " + pad + "px" };
 
   const jump = (id) => {
     const el = document.getElementById(id);
@@ -7807,7 +7820,7 @@ function LandingScreen({ onLogIn }) {
             }}
           />
         )}
-        <div style={{ ...shell, position: "relative", zIndex: 1, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : 56, alignItems: "center" }}>
+        <div style={{ ...shell, position: "relative", zIndex: 1, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : LANDING_HERO_GAP, alignItems: "center" }}>
           <div style={{ minWidth: 0 }}>
             <h1 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 46 : 68, margin: "0 0 24px" }}>
               The creative workspace you’ve been waiting for.
@@ -7881,12 +7894,14 @@ function LandingScreen({ onLogIn }) {
           far left and bleeds off the bottom edge of the band, headline and
           copy stack beside it, and the form sits on the right. */}
       <div id="waitlist" style={{ borderTop: "1px solid " + COLORS.hairline, scrollMarginTop: 16, background: COLORS.ink, color: COLORS.cream, overflow: "hidden" }}>
-        <div style={{ ...shell, paddingTop: isPhone ? 48 : 72, paddingBottom: isPhone ? 48 : 72, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "200px minmax(0, 1.05fr) minmax(0, 0.95fr)", gap: isCompact ? 32 : 48, alignItems: "center" }}>
-          {/* alignSelf end + a negative margin larger than the band's bottom
-              padding is what crops it against the band edge. */}
+        <div style={{ ...shell, paddingTop: isPhone ? 40 : LANDING_BAND_PAD_Y, paddingBottom: isPhone ? 40 : LANDING_BAND_PAD_Y, display: "grid", gridTemplateColumns: isCompact ? "1fr" : LANDING_VASE_SIZE + "px minmax(0, 1.05fr) minmax(0, 0.95fr)", gap: isCompact ? 32 : 48, alignItems: "center" }}>
+          {/* Cut off at exactly half, as in the mockup. alignSelf:end puts the
+              vessel's base on the row's bottom edge; dropping it by the band's
+              bottom padding brings it level with the band edge, and half its
+              own height again puts that edge through its middle. */}
           {!isCompact && (
-            <div aria-hidden="true" style={{ alignSelf: "end", marginBottom: -96, lineHeight: 0 }}>
-              <ProjectIcon icon="roundBulb" color={LANDING_DARK_CARD.muted} size={200} />
+            <div aria-hidden="true" style={{ alignSelf: "end", marginBottom: -(LANDING_BAND_PAD_Y + LANDING_VASE_H / 2), lineHeight: 0 }}>
+              <ProjectIcon icon="roundBulb" color={LANDING_DARK_CARD.muted} size={LANDING_VASE_SIZE} />
             </div>
           )}
           <div style={{ minWidth: 0 }}>
