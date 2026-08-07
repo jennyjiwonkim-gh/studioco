@@ -7765,20 +7765,41 @@ function LandingScreen({ onLogIn }) {
         </div>
       </div>
 
-      {/* Hero — headline left, the real Home screen recreated on the right */}
-      <div style={{ ...shell, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : 56, alignItems: "center" }}>
-        <div style={{ minWidth: 0 }}>
-          <h1 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 46 : 68, margin: "0 0 24px" }}>
-            The creative workspace you’ve been waiting for.
-          </h1>
-          <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 28px", maxWidth: 440 }}>
-            Plan your projects. Track every detail. Create content that connects.
-            All in one beautiful, intuitive space.
-          </p>
-          <WaitlistForm />
-        </div>
-        <div id="preview" style={{ minWidth: 0, scrollMarginTop: 20 }}>
-          <LandingHomeMock compact={isCompact} />
+      {/* Hero — headline left; on the right the Home recreation sits on top of
+          a photograph that bleeds off the right edge of the viewport, per
+          Jenny's mockup. The photo is positioned against the full-width
+          wrapper rather than the centred shell, which is what lets it run to
+          the edge while the content stays within the page margins. */}
+      <div style={{ position: "relative" }}>
+        {!isCompact && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute", top: 0, right: 0, bottom: 0, left: "43%",
+              backgroundImage: "url('assets/hero-vessel.jpg')",
+              backgroundSize: "cover",
+              // The card covers the middle of the panel, so the crop is set to
+              // put the vessel's rim in the strip above it and the foot in the
+              // strip below — otherwise only the belly shows and it reads as a
+              // flat beige field rather than a pot.
+              backgroundPosition: "center 60%",
+            }}
+          />
+        )}
+        <div style={{ ...shell, position: "relative", zIndex: 1, paddingTop: isPhone ? 40 : 64, paddingBottom: isPhone ? 48 : 88, display: "grid", gridTemplateColumns: isCompact ? "1fr" : "minmax(0, 0.85fr) minmax(0, 1.15fr)", gap: isCompact ? 44 : 56, alignItems: "center" }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ ...LANDING_DISPLAY, fontSize: isPhone ? 46 : 68, margin: "0 0 24px" }}>
+              The creative workspace you’ve been waiting for.
+            </h1>
+            <p style={{ fontSize: isPhone ? 15 : 16.5, lineHeight: 1.6, color: COLORS.muted, margin: "0 0 28px", maxWidth: 440 }}>
+              Plan your projects. Track every detail. Create content that connects.
+              All in one beautiful, intuitive space.
+            </p>
+            <WaitlistForm />
+          </div>
+          <div id="preview" style={{ minWidth: 0, scrollMarginTop: 20 }}>
+            <LandingHomeMock compact={isCompact} />
+          </div>
         </div>
       </div>
 
