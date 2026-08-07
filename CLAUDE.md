@@ -1,4 +1,4 @@
-# StudioCo
+# MOA Studio
 
 A private studio-management app for ceramic artists, built and used by Jenny
 (solo ceramic artist, Instagram `@offline_jenny`). Single-file React + in-browser
@@ -6,7 +6,7 @@ Babel, no build step. Deployed as `index.html` at the repo root; Netlify
 auto-deploys on every push to `main`.
 
 A second, separate site — **StoreCo** — is the public-facing sales/archive
-window. StudioCo is the private workshop and the source of truth; StoreCo is fed
+window. MOA Studio is the private workshop and the source of truth; StoreCo is fed
 by it. Do not merge them.
 
 ---

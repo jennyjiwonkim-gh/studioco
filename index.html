@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>StudioCo — Prototype</title>
+<title>MOA Studio — Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
@@ -565,7 +565,7 @@ async function loadAllPersisted() {
     } catch (e) {
       // The row existed but its contents were corrupt/unparseable. That IS
       // worth a warning — fall back to the seed and let the user keep working.
-      console.warn("StudioCo: discarding unreadable saved data for", key, e);
+      console.warn("MOA Studio: discarding unreadable saved data for", key, e);
     }
   }
   return out;
@@ -622,7 +622,7 @@ async function savePersisted(key, value, keepalive) {
       body: JSON.stringify({ user_id: storeUserId, key, value: JSON.stringify(value), updated_at: new Date().toISOString() }),
     });
     if (!res.ok) {
-      console.warn("StudioCo: could not save", key, await res.text());
+      console.warn("MOA Studio: could not save", key, await res.text());
       pendingRetries.set(key, value);
       publishSaveStatus("error");
       scheduleRetry();
@@ -632,7 +632,7 @@ async function savePersisted(key, value, keepalive) {
     if (pendingRetries.size === 0) publishSaveStatus("ok");
     return true;
   } catch (e) {
-    console.warn("StudioCo: could not save", key, e);
+    console.warn("MOA Studio: could not save", key, e);
     pendingRetries.set(key, value);
     publishSaveStatus("error");
     scheduleRetry();
@@ -757,7 +757,7 @@ function piecePlatforms(piece) {
 /* Resolves window.storage once, then hands AppInner fully-formed initial
    values. This is the async gate: nothing in AppInner (or any board under
    it) ever has to know storage is async, because it never mounts until the
-   real values — synced from wherever else this account has used StudioCo —
+   real values — synced from wherever else this account has used MOA Studio —
    are already in hand. */
 function StudioApp({ onSignOut, email }) {
   const [ready, setReady] = React.useState(false);
@@ -976,7 +976,7 @@ function SaveStatusIndicator({ phone }) {
   if (status !== "error") return null;
   return (
     <div
-      title="Some changes haven't saved yet. StudioCo will keep retrying automatically — keep this tab open until it clears."
+      title="Some changes haven't saved yet. MOA Studio will keep retrying automatically — keep this tab open until it clears."
       style={{ display: "flex", alignItems: "center", gap: 5, color: COLORS.tomato, fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}
     >
       <i className="ti ti-alert-triangle" style={{ fontSize: 14 }} aria-hidden="true" />
@@ -1006,7 +1006,7 @@ function TopBar({ onLogoClick, onMenuClick, theme, onToggleTheme, viewport }) {
           </div>
           {!phone && (
             <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              StudioCo
+              MOA Studio
             </span>
           )}
         </div>
@@ -4593,7 +4593,7 @@ function ProjectGallery({ projectId, content, setContent, viewport }) {
     results.forEach((r, i) => {
       if (r.status === "fulfilled") newPhotos.push(r.value);
       else {
-        console.warn("StudioCo: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
+        console.warn("MOA Studio: could not process photo", files[i].name, "-", (r.reason && (r.reason.message || String(r.reason))) || "unknown error");
         failed.push(files[i].name);
       }
     });
@@ -4938,7 +4938,7 @@ async function deletePhotoFromStorage(path) {
       body: JSON.stringify({ prefixes: [path] }),
     });
   } catch (e) {
-    console.warn("StudioCo: could not delete photo from storage", path, e);
+    console.warn("MOA Studio: could not delete photo from storage", path, e);
   }
 }
 
@@ -7562,7 +7562,7 @@ function ToolButton({ active, onClick, title, children }) {
 }
 
 /* ---------- Auth screens ----------
-   Public face of StudioCo. Deliberately in the same editorial language as the
+   Public face of MOA Studio. Deliberately in the same editorial language as the
    app itself — Inter, 3px radius, cream paper, one accent — so signing in
    doesn't feel like a different product from the studio behind it. */
 function AuthShell({ children, maxWidth }) {
