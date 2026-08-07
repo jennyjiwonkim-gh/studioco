@@ -716,6 +716,11 @@ const CONTENT_LIBRARY_SEED = {
   types: ["Carousel", "Long-form video", "Reel — no explainer", "Reel — talk to camera", "Reel — voiceover", "Story"],
   series: ["Motivation Monday", "WIP Wednesday", "Feature Friday"],
   platforms: ["Instagram", "TikTok", "YouTube"],
+  // Overview's Details panel "Tags" field (formerly a fixed "Care & safety"
+  // list) — same shared, growable library pattern as types/series/platforms,
+  // seeded with the values that used to be hardcoded so existing pieces'
+  // saved tags stay valid.
+  tags: ["Food safe", "Dishwasher safe", "Microwave safe", "Oven safe", "Hand wash only", "Not for hot liquids", "Decorative only"],
 };
 
 // Platform moved from a single value to multi-select — pieces saved before
@@ -909,6 +914,8 @@ function AppInner({ initial, storageAvailable, onSignOut, email }) {
           tasks={tasks}
           boardContent={boardContent}
           setBoardContent={setBoardContent}
+          contentLibrary={contentLibrary}
+          setContentLibrary={setContentLibrary}
           onBack={goProjectList}
           onOpenBoard={goBoard}
           onSwitchProject={goProject}
@@ -4125,15 +4132,6 @@ const DEFAULT_PRODUCT = {
   batchSize: 1,
   units: [{ id: "unit-1", sold: false, soldDate: null }],
 };
-const CARE_TAG_OPTIONS = [
-  "Food safe",
-  "Dishwasher safe",
-  "Microwave safe",
-  "Oven safe",
-  "Hand wash only",
-  "Not for hot liquids",
-  "Decorative only",
-];
 const PRODUCT_STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
   { value: "ready", label: "Ready to list" },
@@ -4337,16 +4335,10 @@ function hasProductDetails(content) {
 // inline on the Overview tab rather than a separate click-in page. Starts in
 // its compact read view once real details exist; a bare/new project starts
 // in edit mode directly, since there's nothing yet to summarize.
-function ProjectDetailsPanel({ content, setContent, accentHex, projectId }) {
+function ProjectDetailsPanel({ content, setContent, accentHex, projectId, contentLibrary, setContentLibrary }) {
   const [editing, setEditing] = useState(() => !hasProductDetails(content));
 
   const update = (field, value) => setContent((prev) => ({ ...prev, [field]: value }));
-  const toggleCareTag = (tag) => {
-    setContent((prev) => ({
-      ...prev,
-      careTags: prev.careTags.includes(tag) ? prev.careTags.filter((t) => t !== tag) : [...prev.careTags, tag],
-    }));
-  };
   const addColor = () => {
     setContent((prev) => ({
       ...prev,
@@ -4431,31 +4423,24 @@ function ProjectDetailsPanel({ content, setContent, accentHex, projectId }) {
           </div>
 
           <div>
-            <div style={labelStyle}>Care & safety</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 6 }}>
-              {CARE_TAG_OPTIONS.map((tag) => {
-                const active = content.careTags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    onClick={() => toggleCareTag(tag)}
-                    style={{
-                      fontFamily: "inherit", fontSize: 11, fontWeight: 600, padding: "5px 10px", borderRadius: RADIUS, cursor: "pointer",
-                      background: active ? COLORS.ink : "none", color: active ? COLORS.paper : COLORS.muted,
-                      border: `1px solid ${active ? COLORS.ink : COLORS.hairline}`,
-                    }}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
             <div style={labelStyle}>Listing description</div>
             <textarea value={content.description} onChange={(e) => update("description", e.target.value)} placeholder="A sentence or two about this piece…" style={{ ...fieldStyle, minHeight: 60, resize: "vertical" }} />
           </div>
+
+          <div>
+            <div style={labelStyle}>Tags</div>
+            <div style={{ marginTop: 6 }}>
+              <MultiLibraryPickerField
+                value={content.careTags}
+                onChange={(val) => update("careTags", val)}
+                options={contentLibrary.tags}
+                onAddOption={(val) => setContentLibrary((prev) => ({ ...prev, tags: [...prev.tags, val] }))}
+                placeholder="No tags in your library yet — add one"
+                addLabel="+ Add tag"
+              />
+            </div>
+          </div>
+
           <div>
             <div style={labelStyle}>Other notes</div>
             <textarea value={content.notes} onChange={(e) => update("notes", e.target.value)} placeholder="Care quirks, fragility, one-of-a-kind variation…" style={{ ...fieldStyle, minHeight: 50, resize: "vertical" }} />
@@ -4538,8 +4523,9 @@ function ProjectDetailsPanel({ content, setContent, accentHex, projectId }) {
               </div>
             </DetailRow>
           )}
+          <DetailRow label="Description" value={content.description} />
           {content.careTags.length > 0 && (
-            <DetailRow label="Care & safety">
+            <DetailRow label="Tags">
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                 {content.careTags.map((tag) => (
                   <span key={tag} style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: RADIUS, border: `1px solid ${COLORS.hairline}`, color: COLORS.muted }}>{tag}</span>
@@ -4547,7 +4533,6 @@ function ProjectDetailsPanel({ content, setContent, accentHex, projectId }) {
               </div>
             </DetailRow>
           )}
-          <DetailRow label="Description" value={content.description} />
           <DetailRow label="Notes" value={content.notes} />
           <DetailRow label="Inventory" value={inventorySummary} />
           <DetailRow label="StoreCo" value={content.includeOnStoreCo ? "Included" : "Not included"} />
@@ -4606,39 +4591,40 @@ function ProjectGallery({ projectId, content, setContent }) {
     if (removed && removed.path) deletePhotoFromStorage(removed.path);
   };
 
+  // Hero (primary) photo on the left; everything else fills a 2-wide grid to
+  // its right, two per row — once there are more than 4, later rows just
+  // continue stacking below rather than growing the hero.
+  const primaryPhoto = content.photos.find((p) => p.id === content.primaryPhotoId) || content.photos[0];
+  const secondaryPhotos = content.photos.filter((p) => !primaryPhoto || p.id !== primaryPhoto.id);
+  const addTileIndex = secondaryPhotos.length;
+  const gridPos = (i) => ({ gridColumn: i % 2 === 0 ? "2" : "3", gridRow: Math.floor(i / 2) + 1 });
+
   return (
     <div>
       <SectionLabel>Gallery</SectionLabel>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 10 }}>
-        {content.photos.map((p) => (
-          <div key={p.id} style={{ position: "relative", aspectRatio: "1 / 1" }}>
-            <img
-              src={p.url}
-              alt="Project photo"
-              onClick={() => setContent((prev) => ({ ...prev, primaryPhotoId: p.id }))}
-              title={p.id === content.primaryPhotoId ? "Primary photo" : "Click to set as primary"}
-              style={{
-                width: "100%", height: "100%", objectFit: "cover", borderRadius: RADIUS, cursor: "pointer", display: "block",
-                border: p.id === content.primaryPhotoId ? `2px solid ${COLORS.ink}` : `1px solid ${COLORS.hairline}`,
-              }}
-            />
-            <button
-              onClick={() => removePhoto(p.id)}
-              title="Remove photo"
-              style={{
-                position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
-                background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.paper}`,
-                fontSize: 11, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
-              }}
-            >
-              ×
-            </button>
-          </div>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginTop: 10 }}>
+        {primaryPhoto && (
+          <GalleryTile
+            photo={primaryPhoto}
+            isPrimary
+            onRemove={() => removePhoto(primaryPhoto.id)}
+            style={{ gridColumn: "1", gridRow: "1 / span 2" }}
+          />
+        )}
+        {secondaryPhotos.map((p, i) => (
+          <GalleryTile
+            key={p.id}
+            photo={p}
+            onClick={() => setContent((prev) => ({ ...prev, primaryPhotoId: p.id }))}
+            onRemove={() => removePhoto(p.id)}
+            style={{ ...gridPos(i), aspectRatio: "1 / 1" }}
+          />
         ))}
         <button
           onClick={() => fileInputRef.current && fileInputRef.current.click()}
           disabled={uploading}
           style={{
+            ...(primaryPhoto ? gridPos(addTileIndex) : { gridColumn: "1", gridRow: "1" }),
             aspectRatio: "1 / 1", borderRadius: RADIUS, border: `1px dashed ${COLORS.hairline}`,
             background: "none", color: COLORS.muted, cursor: uploading ? "default" : "pointer",
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, fontFamily: "inherit",
@@ -4654,7 +4640,35 @@ function ProjectGallery({ projectId, content, setContent }) {
   );
 }
 
-function ProjectDashboard({ project, projects, setProjects, tasks, boardContent, setBoardContent, onBack, onOpenBoard, onSwitchProject }) {
+function GalleryTile({ photo, isPrimary, onClick, onRemove, style }) {
+  return (
+    <div style={{ position: "relative", ...style }}>
+      <img
+        src={photo.url}
+        alt="Project photo"
+        onClick={onClick}
+        title={isPrimary ? "Primary photo" : "Click to set as primary"}
+        style={{
+          width: "100%", height: "100%", objectFit: "cover", borderRadius: RADIUS, cursor: onClick ? "pointer" : "default", display: "block",
+          border: isPrimary ? `2px solid ${COLORS.ink}` : `1px solid ${COLORS.hairline}`,
+        }}
+      />
+      <button
+        onClick={onRemove}
+        title="Remove photo"
+        style={{
+          position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
+          background: COLORS.ink, color: COLORS.paper, border: `1px solid ${COLORS.paper}`,
+          fontSize: 11, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function ProjectDashboard({ project, projects, setProjects, tasks, boardContent, setBoardContent, contentLibrary, setContentLibrary, onBack, onOpenBoard, onSwitchProject }) {
   const viewport = useViewport();
   const [editingPriority, setEditingPriority] = useState(false);
   if (!project) return null;
@@ -4763,7 +4777,7 @@ function ProjectDashboard({ project, projects, setProjects, tasks, boardContent,
               numbered "Boards" grid that used to live here is gone now that
               the tab strip in the header covers that navigation. */}
           <div style={{ display: "grid", gridTemplateColumns: viewport.isCompact ? "1fr" : "1fr 1.15fr 0.85fr", gap: 28, alignItems: "start" }}>
-            <ProjectDetailsPanel content={productContent} setContent={setProductContent} accentHex={a.hex} projectId={project.id} />
+            <ProjectDetailsPanel content={productContent} setContent={setProductContent} accentHex={a.hex} projectId={project.id} contentLibrary={contentLibrary} setContentLibrary={setContentLibrary} />
             <ProjectGallery projectId={project.id} content={productContent} setContent={setProductContent} />
 
             <div>
@@ -7428,7 +7442,7 @@ function LibraryPickerField({ value, onChange, options, onAddOption, placeholder
 // single dropdown (a dropdown can't show more than one selection cleanly),
 // plus the same inline "+ Add new…" library-growing affordance. Same
 // toggle-pill language as ProjectDetailsPanel's care-tag picker.
-function MultiLibraryPickerField({ value, onChange, options, onAddOption, placeholder }) {
+function MultiLibraryPickerField({ value, onChange, options, onAddOption, placeholder, addLabel }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const selected = value || [];
@@ -7488,7 +7502,7 @@ function MultiLibraryPickerField({ value, onChange, options, onAddOption, placeh
           onClick={() => setAdding(true)}
           style={{ fontFamily: "inherit", fontSize: 11.5, fontWeight: 600, padding: "6px 12px", borderRadius: RADIUS, cursor: "pointer", background: "none", color: COLORS.muted, border: `1px dashed ${COLORS.hairline}` }}
         >
-          + Add new…
+          {addLabel || "+ Add new…"}
         </button>
       )}
     </div>
