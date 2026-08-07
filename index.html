@@ -7747,6 +7747,7 @@ function LandingScreen({ onLogIn }) {
   };
 
   const navLink = { fontSize: 11.5, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: COLORS.ink, background: "none", border: "none", padding: 0, fontFamily: "inherit", cursor: "pointer" };
+  const landingCols = isPhone ? 2 : isCompact ? 3 : 5;
 
   return (
     <div style={{ fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, Arial, sans-serif', background: COLORS.cream, color: COLORS.ink, minHeight: "100vh", position: "relative", zIndex: 0 }}>
@@ -7804,25 +7805,31 @@ function LandingScreen({ onLogIn }) {
           </h2>
           <LandingRule />
 
-          <div style={{ display: "grid", gridTemplateColumns: isPhone ? "1fr 1fr" : "repeat(5, minmax(0, 1fr))", gap: 0, marginTop: isPhone ? 36 : 52 }}>
-            {LANDING_SECTION_MARKS.map((f, i) => (
-              <div
-                key={f.key}
-                style={{
-                  padding: isPhone ? "18px 14px" : "0 26px",
-                  // Hairline rules between columns, as in the reference. On phone
-                  // the grid is 2-up, so the divider follows column position
-                  // rather than index.
-                  borderLeft: (isPhone ? i % 2 !== 0 : i !== 0) ? "1px solid " + COLORS.hairline : "none",
-                  paddingLeft: i === 0 && !isPhone ? 0 : undefined,
-                  minWidth: 0,
-                }}
-              >
-                <i className={"ti " + f.icon} style={{ fontSize: 26, display: "block", marginBottom: 16 }} aria-hidden="true" />
-                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{f.title}</div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.55, color: COLORS.muted }}>{f.desc}</div>
-              </div>
-            ))}
+          {/* Five across only on real desktop. At tablet widths five columns
+              leave ~165px each and the titles start wrapping mid-phrase, so the
+              strip steps down to 3, then 2 on phone. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(" + landingCols + ", minmax(0, 1fr))", columnGap: 0, rowGap: isPhone ? 30 : 40, marginTop: isPhone ? 34 : 52 }}>
+            {LANDING_SECTION_MARKS.map((f, i) => {
+              const firstInRow = i % landingCols === 0;
+              return (
+                <div
+                  key={f.key}
+                  style={{
+                    // Hairline rules between columns, as in the reference —
+                    // driven by position in the row, not raw index, so they
+                    // stay correct at every column count.
+                    padding: isPhone ? "0 14px" : "0 26px",
+                    paddingLeft: firstInRow ? 0 : undefined,
+                    borderLeft: firstInRow ? "none" : "1px solid " + COLORS.hairline,
+                    minWidth: 0,
+                  }}
+                >
+                  <i className={"ti " + f.icon} style={{ fontSize: 26, display: "block", marginBottom: 16 }} aria-hidden="true" />
+                  <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{f.title}</div>
+                  <div style={{ fontSize: 12.5, lineHeight: 1.55, color: COLORS.muted }}>{f.desc}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
