@@ -7511,6 +7511,10 @@ const LANDING_SECTION_MARKS = [
     desc: "Understand what’s working and make smarter creative decisions." },
 ];
 
+/* Gallery tiles in the project mock. */
+const galleryTile = { background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, overflow: "hidden" };
+const galleryImg = { width: "100%", height: "100%", objectFit: "cover", display: "block" };
+
 /* Waitlist band geometry. The photograph is sized off the band rather than
    given a fixed height — see the note where it's rendered. */
 const LANDING_BAND_PAD_Y = 44;
@@ -7743,14 +7747,35 @@ function LandingProjectMock({ compact }) {
               </div>
             </div>
           </div>
-          <div>
-            <div style={label}>Gallery</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
-              {["hourglass", "roundBulb", "trumpet", "bottle", "pear", "urn"].map((ic, i) => (
-                <div key={ic + i} style={{ background: COLORS.cream, border: "1px solid " + COLORS.hairline, borderRadius: RADIUS, height: 62, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <ProjectIcon icon={ic} color={COLORS.hairline} size={30} />
+          {/* Gallery beside a task list, as in Jenny's reference: the vessel
+              shot spans both rows, the other two stack in the second column,
+              and the last third carries the same task rows as the Home mock. */}
+          <div style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "minmax(0, 1.55fr) minmax(0, 1fr)", gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={label}>Gallery</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gridTemplateRows: "repeat(2, 92px)", gap: 6 }}>
+                <div style={{ ...galleryTile, gridColumn: "1", gridRow: "1 / 3" }}>
+                  <img src="assets/gallery-hero.jpg" alt="" style={galleryImg} />
                 </div>
-              ))}
+                <div style={galleryTile}>
+                  <img src="assets/gallery-plant.jpg" alt="" style={galleryImg} />
+                </div>
+                <div style={galleryTile}>
+                  <img src="assets/gallery-pots.jpg" alt="" style={galleryImg} />
+                </div>
+              </div>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={label}>Next tasks</div>
+              <div style={{ border: "1px solid " + COLORS.hairline, borderRadius: RADIUS }}>
+                {[["Trim foot", "Today"], ["Glaze test #2", "May 2"], ["Photo shoot", "May 4"]].map(([t, when]) => (
+                  <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid " + COLORS.hairline }}>
+                    <div style={{ width: 11, height: 11, border: "1.5px solid " + COLORS.hairline, borderRadius: 2, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t}</span>
+                    <span style={{ fontSize: 9.5, color: COLORS.muted, whiteSpace: "nowrap" }}>{when}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
