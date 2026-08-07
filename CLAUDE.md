@@ -41,6 +41,18 @@ by it. Do not merge them.
 
 Bauhaus-editorial. Inter; `border-radius: 3px` (sharp, not 0, not soft).
 
+**Logo:** `MoaMark` / `MoaLockup` in `index.html` — four gathering nodes
+converging on a centre point inside a medallion ring, from Jenny's "MOA Studio
+Logo" design project. Drawn as SVG on a 100x100 viewBox, not the design's
+nested divs, so it stays crisp at any size.
+
+The four nodes *are* the accent tokens (cobalt, tomato, lemon, royal), so the
+reversed dark lockup needs no separate asset — the tokens already swap. Only
+the ring/spoke/"MOA" ink needed its own variable, **`--logo-ink`** (navy
+`#102A43` light, `#F2EFE6` dark), because reversed goes to off-white rather
+than to dark navy. The inner ring drops below 30px, where it turns to mud.
+"MOA" is Cormorant, "Studio" is letter-spaced Inter in cobalt.
+
 **Display face:** headlines on the public landing page use **Cormorant
 Garamond** (`SERIF` in `index.html`) — Jenny's call, added 2026-08-07, because
 the sans headlines read flat on a marketing page. It is a high-contrast face:

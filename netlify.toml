@@ -1,0 +1,16 @@
+# Netlify deploys on every push to main, and every production deploy costs a
+# flat 15 credits regardless of what changed. That made updating the .md files
+# expensive enough to postpone, which is how main's docs fell two sessions
+# behind the branches.
+#
+# `ignore` runs before the build: exit 0 means "nothing to do, skip it". So a
+# commit that touches only documentation no longer deploys, and main can be
+# kept current for free.
+#
+# If the diff command errors — an unknown ref on a first build, say — it exits
+# non-zero and the build proceeds. Failing towards deploying is the safe
+# direction.
+
+[build]
+  publish = "."
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- index.html assets/"

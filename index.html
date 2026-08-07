@@ -33,6 +33,10 @@
     --accent-cobalt: #1D4ED8;
     --accent-lemon: #8F7300;
     --accent-tomato: #F24A3D;
+    /* Logo ink — the medallion ring, spokes, centre dot and "MOA". Navy on
+       light; the reversed lockup goes to off-white rather than to the dark
+       navy, so this is its own token rather than --accent-navy. */
+    --logo-ink: #102A43;
   }
   [data-theme="dark"] {
     --cream: #16150F;   /* app background — warm near-black */
@@ -51,6 +55,7 @@
     --accent-cobalt: #7FA9FF;
     --accent-lemon: #FFF176;
     --accent-tomato: #FF7A6E;
+    --logo-ink: #F2EFE6;   /* reversed lockup */
   }
   html, body { margin: 0; padding: 0; background: var(--cream); }
   * { box-sizing: border-box; }
@@ -1000,15 +1005,10 @@ function TopBar({ onLogoClick, onMenuClick, theme, onToggleTheme, viewport }) {
         >
           <i className="ti ti-menu-2" style={{ fontSize: 20 }} aria-hidden="true" />
         </button>
-        <div onClick={onLogoClick} style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer", userSelect: "none", flexShrink: 0 }}>
-          <div style={{ width: 26, height: 26, background: COLORS.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 10, height: 10, background: COLORS.lemon }} />
-          </div>
-          {!phone && (
-            <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              MOA Studio
-            </span>
-          )}
+        <div onClick={onLogoClick} style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none", flexShrink: 0 }}>
+          {/* Mark only on phone — the lockup's two lines of type don't earn
+              their width in a 14px-padded bar. */}
+          <MoaLockup size={30} showName={!phone} />
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 14, flexShrink: 0 }}>
@@ -7682,16 +7682,64 @@ function WaitlistForm({ dark, stack }) {
   );
 }
 
-function LandingWordmark({ size }) {
-  const box = size || 26;
+/* ---------- MOA Studio logo ----------
+   From Jenny's "MOA Studio Logo" design: four gathering nodes converge on a
+   centre point inside a medallion ring. Drawn as SVG rather than the design's
+   nested absolutely-positioned divs, so it stays crisp at any size and can sit
+   inline without a wrapper.
+
+   The four node colours are exactly the app's accent tokens, so the reversed
+   dark version comes for free — the tokens already swap. Only the ring/spoke
+   ink needed its own variable (`--logo-ink`), because reversed goes to
+   off-white rather than to dark navy.
+
+   Geometry is a 100x100 viewBox: the spokes run from the centre out to r=50 at
+   each 45° diagonal, and the nodes sit on those spoke ends. */
+function MoaMark({ size }) {
+  const s = size || 32;
+  const ink = "var(--logo-ink)";
+  const d = 35.35; // 50 * cos(45°) — spoke end offset from centre
+  const nodes = [
+    [50 - d, 50 - d, "var(--accent-cobalt)"],
+    [50 + d, 50 - d, "var(--accent-tomato)"],
+    [50 - d, 50 + d, "var(--accent-lemon)"],
+    [50 + d, 50 + d, "var(--accent-royal)"],
+  ];
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ width: box, height: box, background: COLORS.ink, borderRadius: RADIUS, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <ProjectIcon icon="urn" color={COLORS.lemon} size={Math.round(box * 0.56)} />
-      </div>
-      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>MOA Studio</span>
+    <svg width={s} height={s} viewBox="0 0 100 100" fill="none" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+      <circle cx="50" cy="50" r="48.5" stroke={ink} strokeWidth="2.4" />
+      {/* Finest detail in the mark — it turns to mud below ~30px, so it drops. */}
+      {s >= 30 && <circle cx="50" cy="50" r="38" stroke={ink} strokeWidth="1.1" opacity="0.28" />}
+      {nodes.map(([x, y], i) => (
+        <line key={"s" + i} x1="50" y1="50" x2={x} y2={y} stroke={ink} strokeWidth="1.6" opacity="0.55" />
+      ))}
+      {nodes.map(([x, y, c], i) => (
+        <circle key={"n" + i} cx={x} cy={y} r="5.7" fill={c} />
+      ))}
+      <circle cx="50" cy="50" r="6.4" fill={ink} />
+    </svg>
+  );
+}
+
+/* Primary horizontal lockup: mark, then "MOA" over a letter-spaced "Studio".
+   Type scales off the mark so the proportions hold at every placement. */
+function MoaLockup({ size, showName }) {
+  const s = size || 32;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: Math.round(s * 0.34) }}>
+      <MoaMark size={s} />
+      {showName !== false && (
+        <div style={{ display: "flex", flexDirection: "column", gap: Math.max(1, Math.round(s * 0.06)) }}>
+          <span style={{ fontFamily: SERIF, fontWeight: 600, fontSize: Math.round(s * 0.62), lineHeight: 0.9, letterSpacing: "-0.01em", color: "var(--logo-ink)" }}>MOA</span>
+          <span style={{ fontWeight: 600, fontSize: Math.max(6, Math.round(s * 0.24)), letterSpacing: "0.3em", textTransform: "uppercase", color: COLORS.cobalt, lineHeight: 1 }}>Studio</span>
+        </div>
+      )}
     </div>
   );
+}
+
+function LandingWordmark({ size }) {
+  return <MoaLockup size={size || 32} />;
 }
 
 /* Section eyebrow. Deliberately muted rather than accent-colored — the five
