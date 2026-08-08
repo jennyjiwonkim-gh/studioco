@@ -26,9 +26,13 @@ skip the deploy, so it is free.
 ---
 
 ## Live commit
-**`c0dc628`** on `main`. Production deploy verified via the Netlify API:
-`context: production`, `state: ready`, `error_message: null`, published
+**`44a5c57`** on `main` (this file's own merge). The last commit that changed
+the site is `c0dc628`, whose production deploy was verified via the Netlify
+API: `context: production`, `state: ready`, `error_message: null`, published
 2026-08-07 19:38. Live at `https://studioco-app.netlify.app`.
+
+Docs merges after that deployed nothing at all — see the ignore-rule section
+below — so `main` moving without a new deploy is expected, not a fault.
 
 The URL, the GitHub repo and the `studioco:` localStorage keys all still say
 "studioco" **on purpose** — see the naming section in `CLAUDE.md` before
@@ -74,8 +78,12 @@ sending a stale preview link.
 - Caveat: that scratch run used seeded demo projects, not real data.
 
 ## The `netlify.toml` ignore rule works
-Confirmed on its first real test: a docs-only commit produced
-`"Canceled build due to no content change"` and never deployed.
+Confirmed twice: on a preview, and then on a real merge to `main` — PR #9 was
+docs-only and produced **no production deploy at all**. Netlify's current
+deploy stayed the one from 2026-08-07 19:38. Docs cost nothing to land, so
+keep landing them.
+
+The message to expect is `"Canceled build due to no content change"`.
 
 **Expect the PR check to read "Deploy Preview canceled" — that is success, not
 a failure.** Netlify records an ignored build with `state: error` and that
@@ -89,12 +97,18 @@ changed.
 - The breakpoint checks on the project-detail screens ran against seeded demo
   projects, not real data.
 
-## Housekeeping
-- **Stale remote branches** to delete: `landing-page-redesign`,
-  `preview/combined`, `project-header-tabs-redesign`, `docs/session-wrap`,
-  `test-preview-deploy`. All merged or dead. Not deleted — needs Jenny's word.
+## Housekeeping — done
+- Stale remote branches deleted. The remote is now **`main` plus
+  `feat/target-post-date`** (PR #8) and nothing else. Each was checked before
+  deletion by diffing its `index.html` against the surviving branch, not by
+  trusting a "merged" label — see the PR #6 note above for why that matters.
+- Jenny's checkout is on `main` at `44a5c57`, matching `origin/main`.
+
+## Still outstanding
 - `.claude/worktrees/agile-mixing-cat/` can go; the initiative that needed its
   `redesign-concept.html` has shipped.
+- The old session worktrees under `.claude/worktrees/` are disposable — all
+  work from them is in `main` or PR #8.
 
 ## Testing environment (carries forward)
 - No Node/npm/esbuild in this shell, and `python` is the Windows Store stub in
