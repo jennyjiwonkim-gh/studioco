@@ -45,9 +45,8 @@ no dates — that belongs in `handoff.md`.
       orphans cached data. Leave them unless there's a migration plan.
 
 ## Housekeeping
-- [ ] Delete stale remote branches: `landing-page-redesign`,
-      `preview/combined`, `project-header-tabs-redesign`, `docs/session-wrap`,
-      `test-preview-deploy`. All merged or dead.
+- [x] ~~Delete stale remote branches.~~ Done — remote is `main` plus
+      `feat/target-post-date` (PR #8) only.
 - [x] ~~Confirm the `netlify.toml` ignore rule fires.~~ Confirmed:
       a docs-only commit gave "Canceled build due to no content change" and
       never deployed. Netlify logs an ignored build as `state: error`, so the
