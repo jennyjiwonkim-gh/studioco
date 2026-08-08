@@ -4700,6 +4700,7 @@ function GalleryTile({ photo, isPrimary, onClick, onRemove, style }) {
 function ProjectDashboard({ project, projects, setProjects, tasks, boardContent, setBoardContent, contentLibrary, setContentLibrary, onBack, onOpenBoard, onSwitchProject }) {
   const viewport = useViewport();
   const [editingPriority, setEditingPriority] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(false);
   if (!project) return null;
   const a = PROJECT_ACCENTS[project.accentIdx];
   const meta = PROJECT_META[project.id] || {};
@@ -4710,6 +4711,17 @@ function ProjectDashboard({ project, projects, setProjects, tasks, boardContent,
   const updatePriority = (value) => {
     setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, priority: value } : p)));
     setEditingPriority(false);
+  };
+  // Est. materials follows the same precedence as priority: PROJECT_META is a
+  // seed default only, and the live number lives on the project itself, so it
+  // rides along with the already-persisted `projects` key — no schema change.
+  // Seeds are all 0, and 0 reads as "unset" here, so both collapse to null.
+  const budget = project.budget != null ? project.budget : (meta.budget || null);
+  const updateBudget = (value) => {
+    // Keep digits only, so a pasted "$40" still lands as a number rather than
+    // NaN. Anything that isn't a positive amount clears the cell back to "—".
+    const n = Number(String(value).replace(/[^0-9]/g, ""));
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, budget: n > 0 ? n : null } : p)));
   };
   const pTasks = tasks.filter((t) => t.projectId === project.id);
   const completedCount = pTasks.filter((t) => t.completed).length;
@@ -4801,7 +4813,34 @@ function ProjectDashboard({ project, projects, setProjects, tasks, boardContent,
                 <div onClick={() => setEditingPriority(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{priority}</div>
               )}
             </div>
-            <MetricCell label="Est. materials" value={meta.budget ? `$${meta.budget}` : "—"} />
+            <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
+              <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Est. materials</div>
+              {editingBudget ? (
+                <input
+                  autoFocus
+                  inputMode="numeric"
+                  value={budget == null ? "" : String(budget)}
+                  onChange={(e) => updateBudget(e.target.value)}
+                  onBlur={() => setEditingBudget(false)}
+                  onKeyDown={(e) => { if (e.key === "Enter") setEditingBudget(false); }}
+                  placeholder="0"
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    width: "100%",
+                    minWidth: 0,
+                    background: COLORS.cream,
+                    border: `1px solid ${COLORS.hairline}`,
+                    borderRadius: RADIUS,
+                    padding: "3px 6px",
+                    fontFamily: "inherit",
+                    color: COLORS.ink,
+                  }}
+                />
+              ) : (
+                <div onClick={() => setEditingBudget(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{budget ? `$${budget}` : "—"}</div>
+              )}
+            </div>
           </div>
 
           {/* Three-column: details, gallery, this week / upcoming — the
