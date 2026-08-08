@@ -7,12 +7,16 @@ when the active initiative changes, rather than accumulating.
 ## Active: none
 
 The previous initiative — the public landing page + waitlist, shipped together
-with the project-detail redesign and the MOA Studio rename — **landed in `main`
-at `24108bb` on 2026-08-07 and is live**. There is no active initiative until
-Jenny picks the next one.
+with the project-detail redesign, the MOA Studio rename and the new logo —
+**is live on `main` (`c0dc628`)**. There is no active initiative until Jenny
+picks the next one.
 
 Left empty on purpose rather than inventing work: `TODO.md` holds the backlog,
 and choosing from it is Jenny's call, not a default.
+
+**One PR is open and is not an initiative**: [#7](https://github.com/jennyjiwonkim-gh/studioco/pull/7),
+moving "Target post date" onto each content piece. It just needs merging — see
+`handoff.md` for why it ended up on its own PR.
 
 ## Candidates, when it's time to pick
 

@@ -235,6 +235,20 @@ content:
 - **`TODO.md`** — flat standing backlog, no dates or narrative. Items get
   checked off or deleted as they land; new ones get appended as they come up.
 
+**Before trusting any of them, check they are current.** These four files are
+the source of truth over GitHub's commit history — but only if the checkout is
+on an up-to-date `main`. Start a session with `git checkout main && git pull`,
+then confirm `handoff.md`'s "Live commit" matches `git log --oneline -1
+origin/main`. If it doesn't, the file is stale and everything in it is
+suspect.
+
+This is not hypothetical. On 2026-08-07 the checkout sat on a feature branch
+while `main` was itself two sessions behind, because doc updates kept being
+committed to branches that never merged. The files read as confident and
+detailed and were wrong. `netlify.toml`'s ignore rule now makes doc-only
+commits free to merge, so **land documentation on `main` rather than parking
+it on a branch** — that is what keeps the whole system honest.
+
 **Every time `handoff.md` is written** (i.e. at the end of a session), check
 `TODO.md` and `PLAN.md` against what actually happened: cross off / remove
 items that were completed or superseded, and add any new open items or

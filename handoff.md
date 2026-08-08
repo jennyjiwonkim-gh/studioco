@@ -1,90 +1,104 @@
 # MOA Studio Handoff
 
-## Overall Goal
-MOA Studio is Jenny's private, single-file React + Babel-standalone
-ceramic-studio management app (`index.html` at repo root, no build step),
-deployed via Netlify (auto-builds from GitHub on push to `main`), backed by
-Supabase for persistence.
+## START HERE — read this first
 
-## Current Status (2026-08-07)
-- **Everything shipped.** `main` is at `24108bb`, the merge of PR #5. The
-  production deploy is confirmed live via the Netlify API — `context:
-  production`, `state: ready`, `error_message: null`, `commit_ref: 24108bb`,
-  published 17:52.
-- Live at `https://studioco-app.netlify.app`. **The URL keeps the old name on
-  purpose** — that is the Netlify site name, and changing it would break the
-  domain. Same for the GitHub repo.
-- **No open PRs.** #5 and #4 merged; #3 auto-closed once its commits landed in
-  `main` via #5.
-- **No active initiative.** See `PLAN.md` — the next one hasn't been chosen.
+**Read these four files at the repo root: `CLAUDE.md`, `handoff.md`, `PLAN.md`,
+`TODO.md`.** They are the source of truth, not GitHub's commit history. But
+they are only trustworthy if the checkout is on an up-to-date `main`, and that
+has already gone wrong once.
 
-## What Shipped This Session
+Before trusting anything below, run:
 
-### 1. Public landing page + waitlist
-The pre-login screen was rebuilt from Jenny's design: nav, hero with the Home
-screen recreated over a photograph, "One studio, one place." feature strip, a
-project-detail mock, dark early-access band, footer. Cormorant Garamond for
-headlines; Inter still carries everything else.
+```
+git checkout main
+git pull
+```
 
-Waitlist emails really persist, to a `waitlist_signups` table with an anon
-INSERT-only grant and no read path. This is the only write in the app that runs
-without a session. See `CLAUDE.md` for the schema and the RLS-plus-GRANT
-gotcha.
+Then confirm the file you are reading is current: the "Live commit" below
+should match `git log --oneline -1 origin/main`. **If it doesn't, this file is
+stale — pull before doing anything else.**
 
-**The public face of the site is now a waitlist page, not a login box.** That
-was deliberate, but it is the first time it has been live.
+Why this matters: for most of 2026-08-07 the local checkout sat on a feature
+branch, and `main` itself was two sessions behind, because doc updates were
+being committed to branches that hadn't merged. A session reading the folder
+in that state gets a confident, detailed, wrong picture. `netlify.toml` now
+makes doc-only commits free to merge, so there is no longer a reason to let
+`main` fall behind — keep it current.
 
-### 2. Project-detail redesign
-Back arrow, project switcher, tab strip, Product folded into Overview, gallery
-hero + grid, shared Tags library. Built in a previous session, verified and
-shipped in this one.
+---
 
-### 3. Renamed StudioCo → MOA Studio
-Product name only. The identifiers that were deliberately left alone are listed
-in `CLAUDE.md` — do not "tidy" them later.
+## Live commit
+**`c0dc628`** on `main`. Production deploy verified via the Netlify API:
+`context: production`, `state: ready`, `error_message: null`, published
+2026-08-07 19:38. Live at `https://studioco-app.netlify.app`.
 
-## Decisions Jenny Made This Session
-- Keep both the original landing copy and the new marketing page, stacked.
-- Cormorant Garamond for headlines; drop the mockup's pastel band tints in
-  favour of neutral cream/paper alternation.
-- Wire the waitlist to real storage rather than faking the success state.
-- Ship via one combined PR rather than merging #3 and #4 separately — one
-  production deploy instead of two.
+The URL, the GitHub repo and the `studioco:` localStorage keys all still say
+"studioco" **on purpose** — see the naming section in `CLAUDE.md` before
+"fixing" any of them.
 
-## Verification Done
-- Console clean and **zero horizontal overflow at 1440, 1300, 884, 390 and a
-  true 320px viewport**, checked repeatedly through the session.
-- The authenticated click-through that had been outstanding on #3 since before
-  this session is **closed**. Jenny confirmed the auth gate on the deploy
-  preview (signed in → studio, signed out → landing page); the project-detail
-  screens were then verified at 1280/390/320 against a scratch copy with the
-  auth gate bypassed, served outside the repo and deleted afterwards.
-- Caveat worth keeping: that scratch run used the seeded demo projects, not
-  real data. Layout is confirmed; behaviour against real projects rests on
-  Jenny's sign-in.
+## One PR open
+**[PR #7](https://github.com/jennyjiwonkim-gh/studioco/pull/7)** — moves
+"Target post date" off the project Overview and onto each content piece.
+Preview verified at `commit_ref 6af06eb`. Not merged.
 
-## Housekeeping Left Over
-- **Stale remote branches**: `landing-page-redesign`, `preview/combined`,
-  `project-header-tabs-redesign`, `test-preview-deploy`. All merged or dead.
-  Not deleted — say the word.
-- **Jenny's main checkout** was on `project-header-tabs-redesign`. It needs
-  `git checkout main && git pull`.
-- `.claude/worktrees/agile-mixing-cat/` held `redesign-concept.html`, the
-  reference for the project-detail work. That initiative has shipped, so the
-  worktree is now safe to remove.
+It exists because of a mistake worth knowing about: that commit was pushed to
+the PR #6 branch at almost the same moment PR #6 was merged, so the merge
+captured the previous head and the commit was orphaned on the branch. The
+merge commit's parents (`24108bb` + `cc74a81`) show it plainly. **A green
+check on a PR is not proof your latest commit shipped — compare the deploy's
+`commit_ref` to the branch head.** That is how this was caught, after nearly
+sending a stale preview link.
 
-## Testing Environment Notes (carries forward)
-- Still no Node/npm/esbuild in this shell, and `python` is the Windows Store
-  stub in both Git Bash and PowerShell. The working substitute is a PowerShell
-  `HttpListener` static server plus reading the browser console — a Babel
-  syntax error surfaces as an `EXCEPTION` and leaves `#root` empty. The server
-  scripts live in a job-scoped tmp dir and are not durable; recreate them.
-- Chrome on Windows will not size a window below ~545px, so `resize_window`
-  cannot test 320px — use a 320px-wide iframe. This caught two real bugs this
-  session that eyeballing missed.
+## What shipped 2026-08-07
+
+1. **Public landing page + waitlist.** Rebuilt the signed-out screen: nav, hero
+   with the Home screen recreated over a photograph, feature strip, project
+   mock, dark early-access band, footer. Waitlist emails persist for real to a
+   `waitlist_signups` table (anon INSERT-only, no read path) — the only write
+   in the app that runs without a session. **The public face of the site is now
+   a waitlist page, not a login box.**
+2. **Project-detail redesign.** Back arrow, project switcher, tab strip,
+   Product folded into Overview, gallery hero + grid, shared Tags library.
+3. **Renamed StudioCo → MOA Studio**, product name only.
+4. **New logo** — `MoaMark`/`MoaLockup`, medallion with four gathering nodes.
+   The dark variant needs no separate asset; the node colours are the accent
+   tokens and swap themselves.
+5. **`netlify.toml`** — build-ignore rule so commits touching neither
+   `index.html` nor `assets/` skip the deploy.
+
+## Verified
+- Console clean and **zero horizontal overflow at 1632, 1440, 1300, 884, 390
+  and a true 320px viewport**, checked repeatedly.
+- The authenticated click-through outstanding on the project-detail work is
+  **closed**: Jenny confirmed the auth gate on a deploy preview, and the
+  project screens were checked at 1280/390/320 against a scratch copy with the
+  session gate stubbed out.
+- Caveat: that scratch run used seeded demo projects, not real data.
+
+## Not verified
+- **The `netlify.toml` ignore rule has never actually fired.** It reached
+  `main` in a commit that also changed `index.html`, so it built as normal. The
+  next docs-only push is the test — if it still deploys, the rule is wrong.
+- Whether a skipped Netlify build costs zero credits, or merely fewer.
+
+## Housekeeping
+- **Stale remote branches** to delete: `landing-page-redesign`,
+  `preview/combined`, `project-header-tabs-redesign`, `docs/session-wrap`,
+  `test-preview-deploy`. All merged or dead. Not deleted — needs Jenny's word.
+- `.claude/worktrees/agile-mixing-cat/` can go; the initiative that needed its
+  `redesign-concept.html` has shipped.
+
+## Testing environment (carries forward)
+- No Node/npm/esbuild in this shell, and `python` is the Windows Store stub in
+  both Git Bash and PowerShell. Substitute: a PowerShell `HttpListener` static
+  server plus the browser console — a Babel syntax error shows as an
+  `EXCEPTION` and leaves `#root` empty. Server scripts live in a job-scoped tmp
+  dir and are not durable; recreate them.
+- Chrome on Windows won't size a window below ~545px, so `resize_window` can't
+  test 320px. Use a 320px-wide iframe. This caught bugs eyeballing missed.
 - To inspect logged-in screens without credentials, serve a copy of
-  `index.html` with the `App()` session gate stubbed out. It boots on seeded
-  data with a "saving unavailable" banner. Keep that copy outside the repo so
-  it can never be committed.
-- Netlify deploy previews need SSO team login; confirm builds via the Netlify
-  MCP reader (`commit_ref` + `state`) rather than by opening the URL.
+  `index.html` with the `App()` session gate stubbed to a fake session. It
+  boots on seeded data with a "saving unavailable" banner. **Keep that copy
+  outside the repo** so it can never be committed.
+- Deploy previews need Netlify SSO login; confirm builds through the Netlify
+  MCP reader (`commit_ref` + `state`), never the green check alone.
