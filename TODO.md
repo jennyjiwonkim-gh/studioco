@@ -48,9 +48,9 @@ no dates — that belongs in `handoff.md`.
 - [ ] Delete stale remote branches: `landing-page-redesign`,
       `preview/combined`, `project-header-tabs-redesign`, `docs/session-wrap`,
       `test-preview-deploy`. All merged or dead.
-- [ ] Confirm the `netlify.toml` ignore rule actually fires. It has never run —
-      it reached `main` in a commit that also touched `index.html`, so that
-      build went ahead normally. The next docs-only push is the test; if it
-      still deploys, the rule is wrong.
+- [x] ~~Confirm the `netlify.toml` ignore rule fires.~~ Confirmed on PR #7:
+      a docs-only commit gave "Canceled build due to no content change" and
+      never deployed. Netlify logs an ignored build as `state: error`, so the
+      PR check reads "Deploy Preview canceled" — that is success.
 - [ ] `.claude/worktrees/agile-mixing-cat/` can go — the initiative that
       needed its `redesign-concept.html` has shipped.
