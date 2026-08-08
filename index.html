@@ -4193,26 +4193,26 @@ function normalizeProduct(raw) {
 // Seed dashboard metadata per project — answers the open questions from the
 // founder's notes (budget / description / target date / priority / weekly summary)
 const PROJECT_META = {
-  "sardine-plates": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "lobster-plates": { description: "", targetPostDate: null, priority: "Medium", budget: 0 },
-  "mccall-bowls": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "jaffe-shot-glass": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "knicks-ball": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "spiral-vase-morgan-zoe": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "marina-vase": { description: "", targetPostDate: null, priority: "Medium", budget: 0 },
-  "mushroom-lamp-s": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "oil-dispenser": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "sculpted-vase": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "tests": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "v60": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "canyon-mugs": { description: "", targetPostDate: null, priority: "High", budget: 0 },
-  "jaffields": { description: "", targetPostDate: null, priority: "Low", budget: 0 },
-  "shelf-full-of-pots": { description: "", targetPostDate: null, priority: "Medium", budget: 0 },
-  "teacups": { description: "", targetPostDate: null, priority: "Medium", budget: 0 },
-  "moon-jars": { description: "", targetPostDate: null, priority: "Low", budget: 0 },
-  "mushroom-lamp-l": { description: "", targetPostDate: null, priority: "Low", budget: 0 },
-  "large-planter": { description: "", targetPostDate: null, priority: "Low", budget: 0 },
-  "newport-inspo": { description: "", targetPostDate: null, priority: "Low", budget: 0 },
+  "sardine-plates": { description: "", priority: "High", budget: 0 },
+  "lobster-plates": { description: "", priority: "Medium", budget: 0 },
+  "mccall-bowls": { description: "", priority: "High", budget: 0 },
+  "jaffe-shot-glass": { description: "", priority: "High", budget: 0 },
+  "knicks-ball": { description: "", priority: "High", budget: 0 },
+  "spiral-vase-morgan-zoe": { description: "", priority: "High", budget: 0 },
+  "marina-vase": { description: "", priority: "Medium", budget: 0 },
+  "mushroom-lamp-s": { description: "", priority: "High", budget: 0 },
+  "oil-dispenser": { description: "", priority: "High", budget: 0 },
+  "sculpted-vase": { description: "", priority: "High", budget: 0 },
+  "tests": { description: "", priority: "High", budget: 0 },
+  "v60": { description: "", priority: "High", budget: 0 },
+  "canyon-mugs": { description: "", priority: "High", budget: 0 },
+  "jaffields": { description: "", priority: "Low", budget: 0 },
+  "shelf-full-of-pots": { description: "", priority: "Medium", budget: 0 },
+  "teacups": { description: "", priority: "Medium", budget: 0 },
+  "moon-jars": { description: "", priority: "Low", budget: 0 },
+  "mushroom-lamp-l": { description: "", priority: "Low", budget: 0 },
+  "large-planter": { description: "", priority: "Low", budget: 0 },
+  "newport-inspo": { description: "", priority: "Low", budget: 0 },
 };
 
 // Compact "switch project" control — a native <select> sized down to just
@@ -4700,6 +4700,7 @@ function GalleryTile({ photo, isPrimary, onClick, onRemove, style }) {
 function ProjectDashboard({ project, projects, setProjects, tasks, boardContent, setBoardContent, contentLibrary, setContentLibrary, onBack, onOpenBoard, onSwitchProject }) {
   const viewport = useViewport();
   const [editingPriority, setEditingPriority] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(false);
   if (!project) return null;
   const a = PROJECT_ACCENTS[project.accentIdx];
   const meta = PROJECT_META[project.id] || {};
@@ -4710,6 +4711,17 @@ function ProjectDashboard({ project, projects, setProjects, tasks, boardContent,
   const updatePriority = (value) => {
     setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, priority: value } : p)));
     setEditingPriority(false);
+  };
+  // Est. materials follows the same precedence as priority: PROJECT_META is a
+  // seed default only, and the live number lives on the project itself, so it
+  // rides along with the already-persisted `projects` key — no schema change.
+  // Seeds are all 0, and 0 reads as "unset" here, so both collapse to null.
+  const budget = project.budget != null ? project.budget : (meta.budget || null);
+  const updateBudget = (value) => {
+    // Keep digits only, so a pasted "$40" still lands as a number rather than
+    // NaN. Anything that isn't a positive amount clears the cell back to "—".
+    const n = Number(String(value).replace(/[^0-9]/g, ""));
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, budget: n > 0 ? n : null } : p)));
   };
   const pTasks = tasks.filter((t) => t.projectId === project.id);
   const completedCount = pTasks.filter((t) => t.completed).length;
@@ -4762,7 +4774,10 @@ function ProjectDashboard({ project, projects, setProjects, tasks, boardContent,
       <div style={{ borderTop: `3px solid ${a.hex}`, background: COLORS.paper, border: `1px solid ${COLORS.hairline}`, borderRadius: RADIUS, overflow: "hidden" }}>
         <div style={{ padding: "24px 28px" }}>
           {/* Metrics row */}
-          <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 1, background: COLORS.hairline, border: `1px solid ${COLORS.hairline}`, marginBottom: 28 }}>
+          {/* Three cells since "Target post date" moved onto the content piece
+              itself — a project has many posts, so one date per project never
+              had an owner. It was read-only here and had no editor anywhere. */}
+          <div style={{ display: "grid", gridTemplateColumns: viewport.isPhone ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))", gap: 1, background: COLORS.hairline, border: `1px solid ${COLORS.hairline}`, marginBottom: 28 }}>
             <MetricCell
               label="Progress"
               value={`${pct}%`}
@@ -4770,7 +4785,6 @@ function ProjectDashboard({ project, projects, setProjects, tasks, boardContent,
               barColor={a.hex}
               sub={`${craftCompleted} of ${craftTasks.length} craft tasks  |  ${contentCompleted} of ${contentTasks.length} content tasks`}
             />
-            <MetricCell label="Target post date" value={meta.targetPostDate ? fmtDate(meta.targetPostDate) : "—"} sub={meta.targetPostDate ? null : "Not set"} />
             <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
               <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Priority</div>
               {editingPriority ? (
@@ -4799,7 +4813,34 @@ function ProjectDashboard({ project, projects, setProjects, tasks, boardContent,
                 <div onClick={() => setEditingPriority(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{priority}</div>
               )}
             </div>
-            <MetricCell label="Est. materials" value={meta.budget ? `$${meta.budget}` : "—"} />
+            <div style={{ background: COLORS.paper, padding: "16px 18px" }}>
+              <div style={{ fontSize: 10, color: COLORS.muted, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Est. materials</div>
+              {editingBudget ? (
+                <input
+                  autoFocus
+                  inputMode="numeric"
+                  value={budget == null ? "" : String(budget)}
+                  onChange={(e) => updateBudget(e.target.value)}
+                  onBlur={() => setEditingBudget(false)}
+                  onKeyDown={(e) => { if (e.key === "Enter") setEditingBudget(false); }}
+                  placeholder="0"
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    width: "100%",
+                    minWidth: 0,
+                    background: COLORS.cream,
+                    border: `1px solid ${COLORS.hairline}`,
+                    borderRadius: RADIUS,
+                    padding: "3px 6px",
+                    fontFamily: "inherit",
+                    color: COLORS.ink,
+                  }}
+                />
+              ) : (
+                <div onClick={() => setEditingBudget(true)} style={{ fontSize: 19, fontWeight: 700, cursor: "text", color: COLORS.tomato }}>{budget ? `$${budget}` : "—"}</div>
+              )}
+            </div>
           </div>
 
           {/* Three-column: details, gallery, this week / upcoming — the
@@ -4861,10 +4902,6 @@ function TaskMiniList({ items, accentHex, empty }) {
   );
 }
 
-function fmtDate(isoStr) {
-  const d = new Date(isoStr + "T00:00:00");
-  return `${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
-}
 function fmtShortDate(d) {
   return `${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
 }
@@ -7324,7 +7361,9 @@ function ContentPieceForm({ piece, onUpdate, contentLibrary, setContentLibrary }
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
+      {/* minmax(0, …) rather than bare fractions — a long title would otherwise
+          set a min-content floor and push the row wider than its container. */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.7fr) minmax(0, 1.3fr)", gap: 16, marginBottom: 16 }}>
         <div>
           <div style={labelStyle}>Title</div>
           <input value={piece.title || ""} onChange={(e) => onUpdate("title", e.target.value)} style={fieldStyle} placeholder="Content title…" />
@@ -7342,6 +7381,15 @@ function ContentPieceForm({ piece, onUpdate, contentLibrary, setContentLibrary }
         <div>
           <div style={labelStyle}>Episode</div>
           <input value={piece.episode || ""} onChange={(e) => onUpdate("episode", e.target.value)} style={fieldStyle} placeholder="e.g. 1" />
+        </div>
+        <div>
+          <div style={labelStyle}>Target post date</div>
+          <input
+            type="date"
+            value={piece.targetPostDate || ""}
+            onChange={(e) => onUpdate("targetPostDate", e.target.value)}
+            style={fieldStyle}
+          />
         </div>
       </div>
 
