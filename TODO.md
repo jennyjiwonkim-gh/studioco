@@ -20,6 +20,12 @@ no dates — that belongs in `handoff.md`.
       list grows, add an in-app view for it (needs an authed read path — the
       table is deliberately INSERT-only for `anon`).
 
+## Dead scaffolding in the project Overview
+- [ ] "Est. materials" reads from `PROJECT_META.budget`, which is `0` for every
+      project with no editor anywhere and isn't persisted — so the cell always
+      shows "—". Same problem "Target post date" had before it moved onto the
+      content piece. Either wire it up or drop the cell.
+
 ## Landing page follow-ups
 - [ ] Footer's Instagram link points at `@offline_jenny`; swap it for a MOA
       Studio account if one gets made.
@@ -40,7 +46,11 @@ no dates — that belongs in `handoff.md`.
 
 ## Housekeeping
 - [ ] Delete stale remote branches: `landing-page-redesign`,
-      `preview/combined`, `project-header-tabs-redesign`,
+      `preview/combined`, `project-header-tabs-redesign`, `docs/session-wrap`,
       `test-preview-deploy`. All merged or dead.
+- [x] ~~Confirm the `netlify.toml` ignore rule fires.~~ Confirmed:
+      a docs-only commit gave "Canceled build due to no content change" and
+      never deployed. Netlify logs an ignored build as `state: error`, so the
+      PR check reads "Deploy Preview canceled" — that is success.
 - [ ] `.claude/worktrees/agile-mixing-cat/` can go — the initiative that
       needed its `redesign-concept.html` has shipped.

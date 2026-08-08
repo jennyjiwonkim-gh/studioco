@@ -235,6 +235,26 @@ content:
 - **`TODO.md`** — flat standing backlog, no dates or narrative. Items get
   checked off or deleted as they land; new ones get appended as they come up.
 
+**Read all four from `origin/main`, not from the working folder:**
+
+```
+git fetch origin
+git show origin/main:handoff.md
+```
+
+The working folder is often parked on an old branch, so the copy on disk can
+be badly out of date — on 2026-08-07 it was two sessions behind and read as
+confident and detailed while being wrong. Reading from `origin/main` removes
+that failure mode entirely and asks nothing of Jenny.
+
+These files are written for Claude, not for Jenny. They exist so a session can
+learn the current state without reconstructing it from commit messages: git
+history says what changed, these say what is true now, plus what is unverified
+and which traps cost time before.
+
+Land documentation on `main` rather than parking it on a branch —
+`netlify.toml` makes doc-only commits skip the deploy, so it is free.
+
 **Every time `handoff.md` is written** (i.e. at the end of a session), check
 `TODO.md` and `PLAN.md` against what actually happened: cross off / remove
 items that were completed or superseded, and add any new open items or
