@@ -48,7 +48,7 @@ no dates — that belongs in `handoff.md`.
 - [ ] Delete stale remote branches: `landing-page-redesign`,
       `preview/combined`, `project-header-tabs-redesign`, `docs/session-wrap`,
       `test-preview-deploy`. All merged or dead.
-- [x] ~~Confirm the `netlify.toml` ignore rule fires.~~ Confirmed on PR #7:
+- [x] ~~Confirm the `netlify.toml` ignore rule fires.~~ Confirmed:
       a docs-only commit gave "Canceled build due to no content change" and
       never deployed. Netlify logs an ignored build as `state: error`, so the
       PR check reads "Deploy Preview canceled" — that is success.

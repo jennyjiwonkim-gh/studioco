@@ -35,7 +35,7 @@ The URL, the GitHub repo and the `studioco:` localStorage keys all still say
 "fixing" any of them.
 
 ## One PR open
-**[PR #7](https://github.com/jennyjiwonkim-gh/studioco/pull/7)** — moves
+**[PR #8](https://github.com/jennyjiwonkim-gh/studioco/pull/8)** — moves
 "Target post date" off the project Overview and onto each content piece.
 Preview verified at `commit_ref 6af06eb`. Not merged.
 
@@ -74,7 +74,7 @@ sending a stale preview link.
 - Caveat: that scratch run used seeded demo projects, not real data.
 
 ## The `netlify.toml` ignore rule works
-Confirmed on its first real test: the docs-only commit on PR #7 produced
+Confirmed on its first real test: a docs-only commit produced
 `"Canceled build due to no content change"` and never deployed.
 
 **Expect the PR check to read "Deploy Preview canceled" — that is success, not

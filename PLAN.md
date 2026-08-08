@@ -14,9 +14,9 @@ picks the next one.
 Left empty on purpose rather than inventing work: `TODO.md` holds the backlog,
 and choosing from it is Jenny's call, not a default.
 
-**One PR is open and is not an initiative**: [#7](https://github.com/jennyjiwonkim-gh/studioco/pull/7),
-moving "Target post date" onto each content piece. It just needs merging — see
-`handoff.md` for why it ended up on its own PR.
+**One PR is open and is not an initiative**: [#8](https://github.com/jennyjiwonkim-gh/studioco/pull/8),
+moving "Target post date" onto each content piece. Jenny is holding it to
+batch with other work — it is not blocked on anything.
 
 ## Candidates, when it's time to pick
 
