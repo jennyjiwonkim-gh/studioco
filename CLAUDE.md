@@ -235,19 +235,25 @@ content:
 - **`TODO.md`** — flat standing backlog, no dates or narrative. Items get
   checked off or deleted as they land; new ones get appended as they come up.
 
-**Before trusting any of them, check they are current.** These four files are
-the source of truth over GitHub's commit history — but only if the checkout is
-on an up-to-date `main`. Start a session with `git checkout main && git pull`,
-then confirm `handoff.md`'s "Live commit" matches `git log --oneline -1
-origin/main`. If it doesn't, the file is stale and everything in it is
-suspect.
+**Read all four from `origin/main`, not from the working folder:**
 
-This is not hypothetical. On 2026-08-07 the checkout sat on a feature branch
-while `main` was itself two sessions behind, because doc updates kept being
-committed to branches that never merged. The files read as confident and
-detailed and were wrong. `netlify.toml`'s ignore rule now makes doc-only
-commits free to merge, so **land documentation on `main` rather than parking
-it on a branch** — that is what keeps the whole system honest.
+```
+git fetch origin
+git show origin/main:handoff.md
+```
+
+The working folder is often parked on an old branch, so the copy on disk can
+be badly out of date — on 2026-08-07 it was two sessions behind and read as
+confident and detailed while being wrong. Reading from `origin/main` removes
+that failure mode entirely and asks nothing of Jenny.
+
+These files are written for Claude, not for Jenny. They exist so a session can
+learn the current state without reconstructing it from commit messages: git
+history says what changed, these say what is true now, plus what is unverified
+and which traps cost time before.
+
+Land documentation on `main` rather than parking it on a branch —
+`netlify.toml` makes doc-only commits skip the deploy, so it is free.
 
 **Every time `handoff.md` is written** (i.e. at the end of a session), check
 `TODO.md` and `PLAN.md` against what actually happened: cross off / remove

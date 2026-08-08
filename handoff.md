@@ -1,29 +1,27 @@
 # MOA Studio Handoff
 
-## START HERE — read this first
+## START HERE
 
-**Read these four files at the repo root: `CLAUDE.md`, `handoff.md`, `PLAN.md`,
-`TODO.md`.** They are the source of truth, not GitHub's commit history. But
-they are only trustworthy if the checkout is on an up-to-date `main`, and that
-has already gone wrong once.
+**This file is for the next Claude session, not for Jenny.** She doesn't need
+to read it. It exists so a session can learn the current state without
+reconstructing it from thirty commit messages — git history says what changed,
+this says what is true now, plus the things history can't record: what is
+unverified, and which oddities will waste an hour if rediscovered.
 
-Before trusting anything below, run:
+**Read it from `origin/main`, never from the working folder:**
 
 ```
-git checkout main
-git pull
+git fetch origin
+git show origin/main:handoff.md
 ```
 
-Then confirm the file you are reading is current: the "Live commit" below
-should match `git log --oneline -1 origin/main`. **If it doesn't, this file is
-stale — pull before doing anything else.**
+The working folder is often parked on an old branch, so the copy on disk can
+be months out of date while `origin/main` is always current. Reading from
+`origin/main` makes that impossible to get wrong and asks nothing of Jenny.
+Same for `CLAUDE.md`, `PLAN.md` and `TODO.md`.
 
-Why this matters: for most of 2026-08-07 the local checkout sat on a feature
-branch, and `main` itself was two sessions behind, because doc updates were
-being committed to branches that hadn't merged. A session reading the folder
-in that state gets a confident, detailed, wrong picture. `netlify.toml` now
-makes doc-only commits free to merge, so there is no longer a reason to let
-`main` fall behind — keep it current.
+Keep documentation landing on `main` — `netlify.toml` makes doc-only commits
+skip the deploy, so it is free.
 
 ---
 
