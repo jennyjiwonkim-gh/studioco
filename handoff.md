@@ -75,11 +75,21 @@ sending a stale preview link.
   session gate stubbed out.
 - Caveat: that scratch run used seeded demo projects, not real data.
 
+## The `netlify.toml` ignore rule works
+Confirmed on its first real test: the docs-only commit on PR #7 produced
+`"Canceled build due to no content change"` and never deployed.
+
+**Expect the PR check to read "Deploy Preview canceled" — that is success, not
+a failure.** Netlify records an ignored build with `state: error` and that
+message, which looks alarming and isn't. When it happens, the previous deploy
+remains the live preview, which is correct: nothing that affects the page
+changed.
+
 ## Not verified
-- **The `netlify.toml` ignore rule has never actually fired.** It reached
-  `main` in a commit that also changed `index.html`, so it built as normal. The
-  next docs-only push is the test — if it still deploys, the rule is wrong.
-- Whether a skipped Netlify build costs zero credits, or merely fewer.
+- Whether a skipped build costs zero credits or merely fewer. It clearly
+  avoids the deploy; the billing detail is unconfirmed.
+- The breakpoint checks on the project-detail screens ran against seeded demo
+  projects, not real data.
 
 ## Housekeeping
 - **Stale remote branches** to delete: `landing-page-redesign`,
